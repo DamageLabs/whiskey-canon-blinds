@@ -29,6 +29,10 @@ const sessionSchema = z.object({
   customTheme: z.string().optional(),
   proofMin: optionalNumber,
   proofMax: optionalNumber,
+  maxParticipants: z.preprocess(
+    (val) => (val === '' || Number.isNaN(val) ? undefined : val),
+    z.number().min(2, 'Minimum 2 participants').max(50, 'Maximum 50 participants').optional()
+  ),
   whiskeys: z.array(whiskeySchema).min(1, 'Add at least one whiskey').max(6, 'Maximum 6 whiskeys'),
 });
 
@@ -90,6 +94,7 @@ export function CreateSessionPage() {
         customTheme: data.customTheme,
         proofMin: data.proofMin,
         proofMax: data.proofMax,
+        maxParticipants: data.maxParticipants,
         whiskeys: data.whiskeys.map((w) => ({
           name: w.name,
           distillery: w.distillery,
@@ -235,6 +240,15 @@ export function CreateSessionPage() {
                     {...register('proofMax', { valueAsNumber: true })}
                   />
                 </div>
+
+                <Input
+                  label="Max Participants (Optional)"
+                  type="number"
+                  placeholder="Leave empty for unlimited"
+                  hint="Limit how many people can join (2-50)"
+                  error={errors.maxParticipants?.message}
+                  {...register('maxParticipants', { valueAsNumber: true })}
+                />
               </CardContent>
               <CardFooter className="flex justify-end">
                 <Button type="button" onClick={() => setStep('flight')}>

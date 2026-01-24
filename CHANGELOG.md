@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Max participants setting in session creation
+  - Optional field to limit session capacity (2-50 participants)
+  - Backend enforcement rejects joins when session is full
+
+## [d0dadaa] - 2026-01-24
+
+### Added
 - Tasting Protocol Guide page (`/guide`)
   - Quick reference rules for hosting blind tastings
   - Detailed tasting flow with all six phases
