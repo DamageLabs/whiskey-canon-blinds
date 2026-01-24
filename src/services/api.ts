@@ -290,7 +290,7 @@ export interface UserListItemResponse {
   followedAt: string;
 }
 
-export interface PaginatedResponse<T> {
+export interface PaginatedResponse {
   pagination: {
     page: number;
     limit: number;
@@ -299,11 +299,11 @@ export interface PaginatedResponse<T> {
   };
 }
 
-export interface FollowersResponse extends PaginatedResponse<UserListItemResponse> {
+export interface FollowersResponse extends PaginatedResponse {
   followers: UserListItemResponse[];
 }
 
-export interface FollowingResponse extends PaginatedResponse<UserListItemResponse> {
+export interface FollowingResponse extends PaginatedResponse {
   following: UserListItemResponse[];
 }
 
@@ -337,7 +337,7 @@ export interface PublicTastingNoteResponse {
   lockedAt: string;
 }
 
-export interface PublicNotesResponse extends PaginatedResponse<PublicTastingNoteResponse> {
+export interface PublicNotesResponse extends PaginatedResponse {
   notes: PublicTastingNoteResponse[];
 }
 
@@ -546,6 +546,157 @@ export const dataExportApi = {
 </html>`;
 
     // Open print dialog
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  },
+};
+
+// Session Results Export API
+export const resultsExportApi = {
+  // Export session results as CSV
+  downloadCSV: (results: SessionResults) => {
+    const { session, results: whiskeyResults, participantCount } = results;
+
+    // Build CSV content
+    const headers = ['Rank', 'Whiskey', 'Distillery', 'Age', 'Proof', 'Price', 'Avg Score', 'Nose', 'Palate', 'Finish', 'Overall'];
+    const rows = whiskeyResults.map(r => [
+      r.ranking,
+      `"${r.whiskey.name}"`,
+      `"${r.whiskey.distillery}"`,
+      r.whiskey.age || '',
+      r.whiskey.proof,
+      r.whiskey.price ? `$${r.whiskey.price}` : '',
+      r.averageScore.toFixed(2),
+      r.categoryAverages.nose.toFixed(2),
+      r.categoryAverages.palate.toFixed(2),
+      r.categoryAverages.finish.toFixed(2),
+      r.categoryAverages.overall.toFixed(2),
+    ]);
+
+    const csv = [
+      `# Session: ${session.name}`,
+      `# Theme: ${session.theme}${session.customTheme ? ` (${session.customTheme})` : ''}`,
+      `# Participants: ${participantCount}`,
+      `# Exported: ${new Date().toISOString()}`,
+      '',
+      headers.join(','),
+      ...rows.map(row => row.join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${session.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-results.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  // Export session results as PDF (via print dialog)
+  downloadPDF: (results: SessionResults) => {
+    const { session, results: whiskeyResults, participantCount } = results;
+    const winner = whiskeyResults[0];
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${session.name} - Results</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto; }
+    h1 { color: #333; border-bottom: 2px solid #d97706; padding-bottom: 10px; margin-bottom: 5px; }
+    .session-info { color: #666; font-size: 14px; margin-bottom: 30px; }
+    .winner-card { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 2px solid #d97706; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 30px; }
+    .winner-label { color: #92400e; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .winner-name { font-size: 28px; font-weight: bold; color: #78350f; margin-bottom: 4px; }
+    .winner-distillery { color: #92400e; font-size: 16px; margin-bottom: 12px; }
+    .winner-score { font-size: 36px; font-weight: bold; color: #d97706; }
+    .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .results-table th { background: #f3f4f6; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #6b7280; border-bottom: 2px solid #e5e7eb; }
+    .results-table td { padding: 12px; border-bottom: 1px solid #e5e7eb; }
+    .rank { font-weight: bold; color: #d97706; font-size: 18px; }
+    .rank-1 { color: #d97706; }
+    .rank-2 { color: #6b7280; }
+    .rank-3 { color: #92400e; }
+    .whiskey-name { font-weight: 600; color: #1f2937; }
+    .whiskey-details { color: #6b7280; font-size: 13px; }
+    .score { font-weight: 600; color: #d97706; font-size: 18px; }
+    .category-scores { display: flex; gap: 16px; }
+    .category { text-align: center; }
+    .category-value { font-weight: 500; color: #374151; }
+    .category-label { font-size: 10px; color: #9ca3af; text-transform: uppercase; }
+    @media print {
+      body { padding: 20px; }
+      .winner-card { background: #fef3c7; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <h1>${session.name}</h1>
+  <div class="session-info">
+    Theme: ${session.theme}${session.customTheme ? ` (${session.customTheme})` : ''} &bull;
+    ${participantCount} participant${participantCount !== 1 ? 's' : ''} &bull;
+    ${new Date().toLocaleDateString()}
+  </div>
+
+  ${winner ? `
+  <div class="winner-card">
+    <div class="winner-label">Winner</div>
+    <div class="winner-name">${winner.whiskey.name}</div>
+    <div class="winner-distillery">${winner.whiskey.distillery}</div>
+    <div class="winner-score">${winner.averageScore.toFixed(1)} / 10</div>
+  </div>
+  ` : ''}
+
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th>Whiskey</th>
+        <th>Score</th>
+        <th>Nose</th>
+        <th>Palate</th>
+        <th>Finish</th>
+        <th>Overall</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${whiskeyResults.map(r => `
+        <tr>
+          <td class="rank rank-${r.ranking}">#${r.ranking}</td>
+          <td>
+            <div class="whiskey-name">${r.whiskey.name}</div>
+            <div class="whiskey-details">
+              ${r.whiskey.distillery}
+              ${r.whiskey.age ? ` &bull; ${r.whiskey.age}yr` : ''}
+              ${r.whiskey.proof ? ` &bull; ${r.whiskey.proof}°` : ''}
+              ${r.whiskey.price ? ` &bull; $${r.whiskey.price}` : ''}
+            </div>
+          </td>
+          <td class="score">${r.averageScore.toFixed(1)}</td>
+          <td class="category-value">${r.categoryAverages.nose.toFixed(1)}</td>
+          <td class="category-value">${r.categoryAverages.palate.toFixed(1)}</td>
+          <td class="category-value">${r.categoryAverages.finish.toFixed(1)}</td>
+          <td class="category-value">${r.categoryAverages.overall.toFixed(1)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div style="margin-top: 40px; text-align: center; color: #9ca3af; font-size: 12px;">
+    Generated by Whiskey Canon Blinds
+  </div>
+</body>
+</html>`;
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(html);

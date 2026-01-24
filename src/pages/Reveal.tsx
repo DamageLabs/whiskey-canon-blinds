@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, CardContent } from '@/components/ui';
 import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
-import { socialApi } from '@/services/api';
+import { socialApi, resultsExportApi } from '@/services/api';
 import { getScoreDescriptor } from '@/utils/scoring';
 
 export function RevealPage() {
@@ -16,6 +16,19 @@ export function RevealPage() {
   const [isRevealing, setIsRevealing] = useState(false);
   const [sharedScores, setSharedScores] = useState<Set<string>>(new Set());
   const [sharingScoreId, setSharingScoreId] = useState<string | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch session and results on mount
   useEffect(() => {
@@ -287,9 +300,45 @@ export function RevealPage() {
             <Button variant="secondary" onClick={() => navigate('/')}>
               Back to Home
             </Button>
-            <Button variant="primary">
-              Export Results
-            </Button>
+            <div className="relative" ref={exportMenuRef}>
+              <Button
+                variant="primary"
+                onClick={() => setShowExportMenu(!showExportMenu)}
+              >
+                Export Results
+                <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </Button>
+              {showExportMenu && results && (
+                <div className="absolute right-0 mt-2 w-48 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg overflow-hidden z-10">
+                  <button
+                    onClick={() => {
+                      resultsExportApi.downloadCSV(results);
+                      setShowExportMenu(false);
+                    }}
+                    className="w-full px-4 py-3 text-left text-zinc-200 hover:bg-zinc-700 flex items-center gap-3"
+                  >
+                    <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      resultsExportApi.downloadPDF(results);
+                      setShowExportMenu(false);
+                    }}
+                    className="w-full px-4 py-3 text-left text-zinc-200 hover:bg-zinc-700 flex items-center gap-3 border-t border-zinc-700"
+                  >
+                    <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Print / Save PDF
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
