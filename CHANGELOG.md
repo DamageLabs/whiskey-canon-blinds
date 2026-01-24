@@ -8,22 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- User profile page (`/profile`) for account settings
-  - Change display name
-  - Change email address (requires password confirmation)
-  - Change password (invalidates all refresh tokens for security)
-  - Upload, change, or remove profile photo
-  - Tasting profile section with bio, favorite whiskey category, and experience level
-- Profile link in header navigation (click username to access)
-- Profile photo upload functionality
-  - Supports JPEG, PNG, GIF, and WebP formats (max 5MB)
-  - Avatar displayed in header navigation and profile page
-  - Automatic cleanup of old avatars when uploading new ones
-- Tasting profile features
-  - Bio/tagline (up to 200 characters)
-  - Favorite whiskey category (bourbon, rye, scotch, irish, japanese, canadian, other)
-  - Experience level indicator (beginner, intermediate, advanced, expert)
-- `setUser` action in auth store for updating user state
+- Tasting statistics on public profiles
+  - Sessions attended count
+  - Whiskeys rated count
+  - Categories explored with labels
+  - Score distribution visualization
+  - Scoring tendency analysis (generous/balanced/critical)
+  - Average scores by category (nose, palate, finish, overall)
+  - Frequently used tasting notes
+  - Recent session activity
+- Achievement/badge system
+  - 13 achievements across 4 categories (sessions, whiskeys, exploration, hosting)
+  - Progress tracking for unearned achievements
+  - Visual badges with category-specific icons
+  - Achievement summary with completion percentage
+- Tabbed interface on public profiles (Stats, Achievements, Notes)
+
+## [78ec1ff] - 2026-01-24
+
+### Added
 - Social features
   - Follow/unfollow other users
   - View followers list (`/user/:userId/followers`)
@@ -48,10 +51,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Privacy toggle endpoint
   - Public tasting notes endpoint
 
+## [716524c] - 2026-01-24
+
+### Added
+- Tasting profile features
+  - Bio/tagline (up to 200 characters)
+  - Favorite whiskey category (bourbon, rye, scotch, irish, japanese, canadian, other)
+  - Experience level indicator (beginner, intermediate, advanced, expert)
+- `setUser` action in auth store for updating user state
+
+## [e403a36] - 2026-01-24
+
+### Added
+- CLAUDE.md for Claude Code guidance
+
+## [5fcf24b] - 2026-01-24
+
+### Added
+- Profile photo upload functionality
+  - Supports JPEG, PNG, GIF, and WebP formats (max 5MB)
+  - Avatar displayed in header navigation and profile page
+  - Automatic cleanup of old avatars when uploading new ones
+
 ### Changed
 - Header now shows avatar and clickable username linking to profile page
 
-## [0.1.0] - 2026-01-24
+## [00d543e] - 2026-01-24
+
+### Added
+- User profile page (`/profile`) for account settings
+  - Change display name
+  - Change email address (requires password confirmation)
+  - Change password (invalidates all refresh tokens for security)
+- Profile link in header navigation (click username to access)
+
+## [cbfc54d] - 2026-01-24
+
+### Added
+- Email validation on registration (RFC 5322 compliant, blocks disposable emails)
+
+## [797ea73] - 2026-01-24
+
+### Added
+- Apache 2.0 License
+
+## [1ad64ae] - 2026-01-24
+
+### Changed
+- Updated README with setup instructions and API documentation
+
+## [d37f97b] - 2026-01-24
 
 ### Added
 - Initial release of Whiskey Canon Blinds
@@ -65,7 +114,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User authentication with JWT (access + refresh + participant tokens)
 - Role-based access control (user/admin roles)
 - Admin dashboard for user and session management
-- Email validation on registration (RFC 5322 compliant, blocks disposable emails)
 - Responsive dark theme UI with Tailwind CSS
 - Navigation header and footer on all pages
 
@@ -73,7 +121,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frontend: React 19, TypeScript, Vite, Zustand, React Router v7
 - Backend: Node.js, Express 5, SQLite, Drizzle ORM, Socket.io
 - Authentication: JWT with bcrypt password hashing
-
-### Documentation
-- README.md with setup instructions and API documentation
-- Apache 2.0 License

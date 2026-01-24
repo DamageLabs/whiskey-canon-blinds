@@ -447,4 +447,396 @@ router.get('/is-following/:userId', authenticateUser, async (req: AuthRequest, r
   }
 });
 
+// Get tasting statistics for a user
+router.get('/profile/:userId/stats', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.params.userId as string;
+
+    // Check if user exists
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get all participant records for this user
+    const participantRecords = await db.query.participants.findMany({
+      where: eq(schema.participants.userId, userId),
+    });
+
+    const participantIds = participantRecords.map(p => p.id);
+
+    // Get unique sessions attended (completed sessions only)
+    const sessionsAttended = await db
+      .select({
+        sessionId: schema.participants.sessionId,
+        sessionName: schema.sessions.name,
+        sessionTheme: schema.sessions.theme,
+        completedAt: schema.sessions.updatedAt,
+      })
+      .from(schema.participants)
+      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .where(and(
+        eq(schema.participants.userId, userId),
+        eq(schema.sessions.status, 'completed')
+      ))
+      .orderBy(desc(schema.sessions.updatedAt));
+
+    // Get all scores for this user
+    const allScores = participantIds.length > 0
+      ? await db
+          .select({
+            score: schema.scores,
+            whiskey: schema.whiskeys,
+          })
+          .from(schema.scores)
+          .innerJoin(schema.whiskeys, eq(schema.scores.whiskeyId, schema.whiskeys.id))
+          .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+          .where(eq(schema.participants.userId, userId))
+      : [];
+
+    const totalWhiskeysRated = allScores.length;
+
+    // Calculate average scores
+    let avgNose = 0, avgPalate = 0, avgFinish = 0, avgOverall = 0, avgTotal = 0;
+    if (totalWhiskeysRated > 0) {
+      avgNose = allScores.reduce((sum, s) => sum + s.score.nose, 0) / totalWhiskeysRated;
+      avgPalate = allScores.reduce((sum, s) => sum + s.score.palate, 0) / totalWhiskeysRated;
+      avgFinish = allScores.reduce((sum, s) => sum + s.score.finish, 0) / totalWhiskeysRated;
+      avgOverall = allScores.reduce((sum, s) => sum + s.score.overall, 0) / totalWhiskeysRated;
+      avgTotal = allScores.reduce((sum, s) => sum + s.score.totalScore, 0) / totalWhiskeysRated;
+    }
+
+    // Calculate score distribution (1-10 buckets)
+    const scoreDistribution: Record<number, number> = {};
+    for (let i = 1; i <= 10; i++) {
+      scoreDistribution[i] = 0;
+    }
+    allScores.forEach(s => {
+      const roundedTotal = Math.round(s.score.totalScore);
+      const bucket = Math.min(10, Math.max(1, roundedTotal));
+      scoreDistribution[bucket]++;
+    });
+
+    // Get categories explored (unique whiskey themes/regions)
+    const categoriesExplored = new Set<string>();
+    const sessionsWithThemes = await db
+      .select({ theme: schema.sessions.theme })
+      .from(schema.participants)
+      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .where(eq(schema.participants.userId, userId));
+
+    sessionsWithThemes.forEach(s => {
+      if (s.theme) categoriesExplored.add(s.theme);
+    });
+
+    // Extract common words from tasting notes
+    const allNotes: string[] = [];
+    allScores.forEach(s => {
+      if (s.score.noseNotes) allNotes.push(s.score.noseNotes);
+      if (s.score.palateNotes) allNotes.push(s.score.palateNotes);
+      if (s.score.finishNotes) allNotes.push(s.score.finishNotes);
+      if (s.score.generalNotes) allNotes.push(s.score.generalNotes);
+    });
+
+    // Simple word frequency analysis for common tasting terms
+    const tastingTerms = [
+      'vanilla', 'caramel', 'oak', 'honey', 'spice', 'cinnamon', 'cherry', 'apple',
+      'pear', 'citrus', 'orange', 'lemon', 'chocolate', 'coffee', 'toffee', 'butterscotch',
+      'smoke', 'peat', 'leather', 'tobacco', 'nuts', 'almond', 'walnut', 'maple',
+      'brown sugar', 'molasses', 'pepper', 'clove', 'nutmeg', 'ginger', 'mint',
+      'floral', 'fruity', 'sweet', 'dry', 'smooth', 'bold', 'rich', 'complex',
+      'balanced', 'warm', 'heat', 'burn', 'long', 'short', 'finish'
+    ];
+
+    const notesText = allNotes.join(' ').toLowerCase();
+    const termCounts: Record<string, number> = {};
+    tastingTerms.forEach(term => {
+      const regex = new RegExp(`\\b${term}\\b`, 'gi');
+      const matches = notesText.match(regex);
+      if (matches && matches.length > 0) {
+        termCounts[term] = matches.length;
+      }
+    });
+
+    // Get top 10 most used terms
+    const favoriteNotes = Object.entries(termCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([term, count]) => ({ term, count }));
+
+    // Calculate scoring tendency (are they a tough or generous scorer?)
+    let scoringTendency = 'balanced';
+    if (avgTotal > 0) {
+      if (avgTotal >= 7.5) scoringTendency = 'generous';
+      else if (avgTotal <= 5.5) scoringTendency = 'critical';
+    }
+
+    // Recent activity (last 5 sessions)
+    const recentSessions = sessionsAttended.slice(0, 5).map(s => ({
+      id: s.sessionId,
+      name: s.sessionName,
+      theme: s.sessionTheme,
+      completedAt: s.completedAt,
+    }));
+
+    return res.json({
+      overview: {
+        sessionsAttended: sessionsAttended.length,
+        whiskeysRated: totalWhiskeysRated,
+        categoriesExplored: Array.from(categoriesExplored),
+      },
+      scoringTendencies: {
+        averages: {
+          nose: Math.round(avgNose * 10) / 10,
+          palate: Math.round(avgPalate * 10) / 10,
+          finish: Math.round(avgFinish * 10) / 10,
+          overall: Math.round(avgOverall * 10) / 10,
+          total: Math.round(avgTotal * 10) / 10,
+        },
+        distribution: scoreDistribution,
+        tendency: scoringTendency,
+      },
+      favoriteNotes,
+      recentActivity: recentSessions,
+    });
+  } catch (error) {
+    console.error('Get tasting stats error:', error);
+    return res.status(500).json({ error: 'Failed to get tasting statistics' });
+  }
+});
+
+// Get achievements/badges for a user
+router.get('/profile/:userId/achievements', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.params.userId as string;
+
+    // Check if user exists
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get statistics needed for achievements
+    const participantRecords = await db.query.participants.findMany({
+      where: eq(schema.participants.userId, userId),
+    });
+
+    // Get completed sessions count
+    const completedSessions = await db
+      .select({ count: sql<number>`count(DISTINCT ${schema.participants.sessionId})` })
+      .from(schema.participants)
+      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .where(and(
+        eq(schema.participants.userId, userId),
+        eq(schema.sessions.status, 'completed')
+      ));
+
+    const sessionsCount = completedSessions[0]?.count || 0;
+
+    // Get whiskeys rated count
+    const whiskeysRated = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.scores)
+      .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+      .where(eq(schema.participants.userId, userId));
+
+    const whiskeysCount = whiskeysRated[0]?.count || 0;
+
+    // Get categories explored
+    const categoriesResult = await db
+      .select({ theme: schema.sessions.theme })
+      .from(schema.participants)
+      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .where(and(
+        eq(schema.participants.userId, userId),
+        eq(schema.sessions.status, 'completed')
+      ));
+
+    const uniqueCategories = new Set(categoriesResult.map(c => c.theme).filter(Boolean));
+    const categoriesCount = uniqueCategories.size;
+
+    // Get sessions where user was moderator
+    const moderatedSessions = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.sessions)
+      .where(and(
+        eq(schema.sessions.moderatorId, userId),
+        eq(schema.sessions.status, 'completed')
+      ));
+
+    const moderatedCount = moderatedSessions[0]?.count || 0;
+
+    // Define achievements
+    const achievements = [
+      // Session milestones
+      {
+        id: 'first_tasting',
+        name: 'First Sip',
+        description: 'Complete your first tasting session',
+        icon: 'glass',
+        category: 'sessions',
+        earned: sessionsCount >= 1,
+        progress: Math.min(sessionsCount, 1),
+        target: 1,
+      },
+      {
+        id: 'sessions_5',
+        name: 'Regular Taster',
+        description: 'Complete 5 tasting sessions',
+        icon: 'calendar',
+        category: 'sessions',
+        earned: sessionsCount >= 5,
+        progress: Math.min(sessionsCount, 5),
+        target: 5,
+      },
+      {
+        id: 'sessions_10',
+        name: 'Dedicated Enthusiast',
+        description: 'Complete 10 tasting sessions',
+        icon: 'star',
+        category: 'sessions',
+        earned: sessionsCount >= 10,
+        progress: Math.min(sessionsCount, 10),
+        target: 10,
+      },
+      {
+        id: 'sessions_25',
+        name: 'Seasoned Connoisseur',
+        description: 'Complete 25 tasting sessions',
+        icon: 'trophy',
+        category: 'sessions',
+        earned: sessionsCount >= 25,
+        progress: Math.min(sessionsCount, 25),
+        target: 25,
+      },
+
+      // Whiskey milestones
+      {
+        id: 'whiskeys_10',
+        name: 'Getting Started',
+        description: 'Rate 10 different whiskeys',
+        icon: 'bottle',
+        category: 'whiskeys',
+        earned: whiskeysCount >= 10,
+        progress: Math.min(whiskeysCount, 10),
+        target: 10,
+      },
+      {
+        id: 'whiskeys_25',
+        name: 'Building a Palate',
+        description: 'Rate 25 different whiskeys',
+        icon: 'bottles',
+        category: 'whiskeys',
+        earned: whiskeysCount >= 25,
+        progress: Math.min(whiskeysCount, 25),
+        target: 25,
+      },
+      {
+        id: 'whiskeys_50',
+        name: 'Well Versed',
+        description: 'Rate 50 different whiskeys',
+        icon: 'collection',
+        category: 'whiskeys',
+        earned: whiskeysCount >= 50,
+        progress: Math.min(whiskeysCount, 50),
+        target: 50,
+      },
+      {
+        id: 'whiskeys_100',
+        name: 'Century Club',
+        description: 'Rate 100 different whiskeys',
+        icon: 'medal',
+        category: 'whiskeys',
+        earned: whiskeysCount >= 100,
+        progress: Math.min(whiskeysCount, 100),
+        target: 100,
+      },
+
+      // Category exploration
+      {
+        id: 'categories_3',
+        name: 'Explorer',
+        description: 'Taste whiskeys from 3 different categories',
+        icon: 'compass',
+        category: 'exploration',
+        earned: categoriesCount >= 3,
+        progress: Math.min(categoriesCount, 3),
+        target: 3,
+      },
+      {
+        id: 'categories_5',
+        name: 'World Traveler',
+        description: 'Taste whiskeys from 5 different categories',
+        icon: 'globe',
+        category: 'exploration',
+        earned: categoriesCount >= 5,
+        progress: Math.min(categoriesCount, 5),
+        target: 5,
+      },
+      {
+        id: 'categories_all',
+        name: 'Global Palate',
+        description: 'Taste whiskeys from all 7 categories',
+        icon: 'world',
+        category: 'exploration',
+        earned: categoriesCount >= 7,
+        progress: Math.min(categoriesCount, 7),
+        target: 7,
+      },
+
+      // Hosting achievements
+      {
+        id: 'first_host',
+        name: 'Party Starter',
+        description: 'Host your first tasting session',
+        icon: 'host',
+        category: 'hosting',
+        earned: moderatedCount >= 1,
+        progress: Math.min(moderatedCount, 1),
+        target: 1,
+      },
+      {
+        id: 'host_5',
+        name: 'Gracious Host',
+        description: 'Host 5 tasting sessions',
+        icon: 'crown',
+        category: 'hosting',
+        earned: moderatedCount >= 5,
+        progress: Math.min(moderatedCount, 5),
+        target: 5,
+      },
+      {
+        id: 'host_10',
+        name: 'Master of Ceremonies',
+        description: 'Host 10 tasting sessions',
+        icon: 'scepter',
+        category: 'hosting',
+        earned: moderatedCount >= 10,
+        progress: Math.min(moderatedCount, 10),
+        target: 10,
+      },
+    ];
+
+    const earnedCount = achievements.filter(a => a.earned).length;
+
+    return res.json({
+      achievements,
+      summary: {
+        earned: earnedCount,
+        total: achievements.length,
+        percentage: Math.round((earnedCount / achievements.length) * 100),
+      },
+    });
+  } catch (error) {
+    console.error('Get achievements error:', error);
+    return res.status(500).json({ error: 'Failed to get achievements' });
+  }
+});
+
 export default router;
