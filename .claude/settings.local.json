@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run build:server:*)",
+      "Bash(timeout 10 npm run dev:server:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(timeout 8 npm run dev:server)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjYjJiOWMxMi0xNTI3LTRmNmItODk3Zi1lNGUwNDU4OGVkZGEiLCJlbWFpbCI6InRlc3QyQHRlc3QuY29tIiwiaWF0IjoxNzY5MjY1OTA0LCJleHAiOjE3NjkyNjY4MDR9.-eSFUJMG8xkBi8sRwhQvl0oXjw8b5RFGF4A0ht4v1FA\")",
+      "Bash(sqlite3:*)"
+    ]
+  }
+}
