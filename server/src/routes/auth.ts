@@ -11,6 +11,7 @@ import {
   verifyToken,
   JwtPayload,
 } from '../middleware/auth';
+import { validateEmail, normalizeEmail } from '../utils/validation';
 
 const router = Router();
 
@@ -23,9 +24,17 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Email, password, and display name are required' });
     }
 
+    // Validate email format
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: emailValidation.error });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
     // Check if user exists
     const existing = await db.query.users.findFirst({
-      where: eq(schema.users.email, email.toLowerCase()),
+      where: eq(schema.users.email, normalizedEmail),
     });
 
     if (existing) {
@@ -41,15 +50,15 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
 
     await db.insert(schema.users).values({
       id: userId,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       passwordHash,
       displayName,
       createdAt: now,
     });
 
     // Generate tokens (new users default to 'user' role)
-    const accessToken = generateAccessToken({ userId, email: email.toLowerCase(), role: 'user' });
-    const refreshToken = generateRefreshToken({ userId, email: email.toLowerCase(), role: 'user' });
+    const accessToken = generateAccessToken({ userId, email: normalizedEmail, role: 'user' });
+    const refreshToken = generateRefreshToken({ userId, email: normalizedEmail, role: 'user' });
 
     // Store refresh token
     await db.insert(schema.refreshTokens).values({
@@ -78,7 +87,7 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     return res.status(201).json({
       user: {
         id: userId,
-        email: email.toLowerCase(),
+        email: normalizedEmail,
         displayName,
         role: 'user',
       },

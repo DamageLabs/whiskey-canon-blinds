@@ -4,10 +4,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input, Card, CardContent } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
+import { validateEmail } from '@/utils/validation';
 
 const registerSchema = z.object({
   displayName: z.string().min(2, 'Name must be at least 2 characters').max(30, 'Name must be 30 characters or less'),
-  email: z.string().email('Invalid email address'),
+  email: z.string().refine(
+    (email) => validateEmail(email).valid,
+    (email) => ({ message: validateEmail(email).error || 'Invalid email address' })
+  ),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
