@@ -24,6 +24,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Favorite whiskey category (bourbon, rye, scotch, irish, japanese, canadian, other)
   - Experience level indicator (beginner, intermediate, advanced, expert)
 - `setUser` action in auth store for updating user state
+- Social features
+  - Follow/unfollow other users
+  - View followers list (`/user/:userId/followers`)
+  - View following list (`/user/:userId/following`)
+  - Follower and following counts on profiles
+- Public profile pages (`/user/:userId`)
+  - View any user's public profile
+  - Profile privacy toggle (public/private)
+  - Private profiles show limited info to non-followers
+- Shareable tasting notes
+  - Share individual tasting scores to public profile
+  - Toggle note visibility from Profile page or Reveal page
+  - Public notes display whiskey details, scores, and tasting notes
+- New database tables and columns
+  - `follows` table for follow relationships
+  - `is_profile_public` column on users (default: true)
+  - `is_public` column on scores (default: false)
+- Social API endpoints (`/api/social/*`)
+  - Follow/unfollow endpoints
+  - Followers/following list endpoints (paginated)
+  - Public profile endpoint with stats
+  - Privacy toggle endpoint
+  - Public tasting notes endpoint
 
 ### Changed
 - Header now shows avatar and clickable username linking to profile page
