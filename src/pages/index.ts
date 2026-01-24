@@ -12,3 +12,4 @@ export { ProfilePage } from './Profile';
 export { PublicProfilePage } from './PublicProfile';
 export { FollowersPage } from './Followers';
 export { FollowingPage } from './Following';
+export { TastingGuidePage } from './TastingGuide';

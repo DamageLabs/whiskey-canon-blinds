@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tasting Protocol Guide page (`/guide`)
+  - Quick reference rules for hosting blind tastings
+  - Detailed tasting flow with all six phases
+  - Scoring system with category weights (nose 25%, palate 35%, finish 25%, overall 15%)
+  - Scoring guidelines reference (1-10 scale descriptions)
+  - Anti-anchoring rules explanation
+  - Tips for hosts
+- Footer navigation links (Tasting Guide, Host a Tasting, Join a Session)
+
+## [0e58dd6] - 2026-01-24
+
+### Added
 - Data export and GDPR compliance features
   - Export all personal data as JSON (account, sessions, scores, social data)
   - Download tasting history as CSV spreadsheet
