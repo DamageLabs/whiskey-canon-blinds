@@ -72,9 +72,16 @@ export function Header() {
 
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-zinc-400 hidden sm:inline">
+                <Link
+                  to="/profile"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive('/profile')
+                      ? 'bg-zinc-800 text-amber-500'
+                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+                  }`}
+                >
                   {user?.displayName}
-                </span>
+                </Link>
                 <Link
                   to="/logout"
                   className="px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"

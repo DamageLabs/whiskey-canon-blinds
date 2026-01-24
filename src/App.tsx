@@ -10,6 +10,7 @@ import {
   RegisterPage,
   LogoutPage,
   AdminPage,
+  ProfilePage,
 } from '@/pages';
 import { Layout } from '@/components/layout';
 
@@ -32,6 +33,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/logout" element={<LogoutPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
 
           {/* Admin */}
           <Route path="/admin" element={<AdminPage />} />
