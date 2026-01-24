@@ -90,6 +90,52 @@ interface ShareableScoreResponse {
   lockedAt: string;
 }
 
+interface TastingStatsResponse {
+  overview: {
+    sessionsAttended: number;
+    whiskeysRated: number;
+    categoriesExplored: string[];
+  };
+  scoringTendencies: {
+    averages: {
+      nose: number;
+      palate: number;
+      finish: number;
+      overall: number;
+      total: number;
+    };
+    distribution: Record<number, number>;
+    tendency: 'generous' | 'balanced' | 'critical';
+  };
+  favoriteNotes: Array<{ term: string; count: number }>;
+  recentActivity: Array<{
+    id: string;
+    name: string;
+    theme: string;
+    completedAt: string;
+  }>;
+}
+
+interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  earned: boolean;
+  progress: number;
+  target: number;
+}
+
+interface AchievementsResponse {
+  achievements: Achievement[];
+  summary: {
+    earned: number;
+    total: number;
+    percentage: number;
+  };
+}
+
 interface SocialState {
   // Profile state
   profile: PublicProfileResponse | null;
@@ -113,6 +159,14 @@ interface SocialState {
   shareableScores: ShareableScoreResponse[];
   isLoadingShareable: boolean;
 
+  // Tasting stats state
+  tastingStats: TastingStatsResponse | null;
+  isLoadingStats: boolean;
+
+  // Achievements state
+  achievements: AchievementsResponse | null;
+  isLoadingAchievements: boolean;
+
   // Follow action state
   isFollowLoading: boolean;
 
@@ -122,6 +176,8 @@ interface SocialState {
   fetchFollowing: (userId: string, page?: number) => Promise<void>;
   fetchPublicNotes: (userId: string, page?: number) => Promise<void>;
   fetchShareableScores: () => Promise<void>;
+  fetchTastingStats: (userId: string) => Promise<void>;
+  fetchAchievements: (userId: string) => Promise<void>;
   followUser: (userId: string) => Promise<void>;
   unfollowUser: (userId: string) => Promise<void>;
   togglePrivacy: (isPublic: boolean) => Promise<void>;
@@ -151,6 +207,12 @@ export const useSocialStore = create<SocialState>()(
 
       shareableScores: [],
       isLoadingShareable: false,
+
+      tastingStats: null,
+      isLoadingStats: false,
+
+      achievements: null,
+      isLoadingAchievements: false,
 
       isFollowLoading: false,
 
@@ -239,6 +301,28 @@ export const useSocialStore = create<SocialState>()(
         } catch (error) {
           console.error('Failed to fetch shareable scores:', error);
           set({ isLoadingShareable: false });
+        }
+      },
+
+      fetchTastingStats: async (userId: string) => {
+        set({ isLoadingStats: true });
+        try {
+          const stats = await socialApi.getTastingStats(userId);
+          set({ tastingStats: stats, isLoadingStats: false });
+        } catch (error) {
+          console.error('Failed to fetch tasting stats:', error);
+          set({ isLoadingStats: false });
+        }
+      },
+
+      fetchAchievements: async (userId: string) => {
+        set({ isLoadingAchievements: true });
+        try {
+          const achievements = await socialApi.getAchievements(userId);
+          set({ achievements, isLoadingAchievements: false });
+        } catch (error) {
+          console.error('Failed to fetch achievements:', error);
+          set({ isLoadingAchievements: false });
         }
       },
 
@@ -353,6 +437,8 @@ export const useSocialStore = create<SocialState>()(
           followersPagination: null,
           followingPagination: null,
           notesPagination: null,
+          tastingStats: null,
+          achievements: null,
         });
       },
 

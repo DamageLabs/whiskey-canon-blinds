@@ -372,6 +372,53 @@ export interface ShareableScoreResponse {
   lockedAt: string;
 }
 
+// Tasting Stats Types
+export interface TastingStatsResponse {
+  overview: {
+    sessionsAttended: number;
+    whiskeysRated: number;
+    categoriesExplored: string[];
+  };
+  scoringTendencies: {
+    averages: {
+      nose: number;
+      palate: number;
+      finish: number;
+      overall: number;
+      total: number;
+    };
+    distribution: Record<number, number>;
+    tendency: 'generous' | 'balanced' | 'critical';
+  };
+  favoriteNotes: Array<{ term: string; count: number }>;
+  recentActivity: Array<{
+    id: string;
+    name: string;
+    theme: string;
+    completedAt: string;
+  }>;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  earned: boolean;
+  progress: number;
+  target: number;
+}
+
+export interface AchievementsResponse {
+  achievements: Achievement[];
+  summary: {
+    earned: number;
+    total: number;
+    percentage: number;
+  };
+}
+
 export const socialApi = {
   // Follow system
   follow: (userId: string) =>
@@ -402,6 +449,13 @@ export const socialApi = {
   // Public notes
   getPublicNotes: (userId: string, page = 1, limit = 10) =>
     request<PublicNotesResponse>(`/social/profile/${userId}/notes?page=${page}&limit=${limit}`),
+
+  // Tasting stats
+  getTastingStats: (userId: string) =>
+    request<TastingStatsResponse>(`/social/profile/${userId}/stats`),
+
+  getAchievements: (userId: string) =>
+    request<AchievementsResponse>(`/social/profile/${userId}/achievements`),
 
   // Score visibility
   toggleScoreVisibility: (scoreId: string, isPublic: boolean) =>
