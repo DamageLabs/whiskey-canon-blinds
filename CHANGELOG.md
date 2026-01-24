@@ -13,11 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Change email address (requires password confirmation)
   - Change password (invalidates all refresh tokens for security)
   - Upload, change, or remove profile photo
+  - Tasting profile section with bio, favorite whiskey category, and experience level
 - Profile link in header navigation (click username to access)
 - Profile photo upload functionality
   - Supports JPEG, PNG, GIF, and WebP formats (max 5MB)
   - Avatar displayed in header navigation and profile page
   - Automatic cleanup of old avatars when uploading new ones
+- Tasting profile features
+  - Bio/tagline (up to 200 characters)
+  - Favorite whiskey category (bourbon, rye, scotch, irish, japanese, canadian, other)
+  - Experience level indicator (beginner, intermediate, advanced, expert)
 - `setUser` action in auth store for updating user state
 
 ### Changed
