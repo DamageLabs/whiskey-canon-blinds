@@ -419,6 +419,144 @@ export interface AchievementsResponse {
   };
 }
 
+// Data Export API
+export const dataExportApi = {
+  // Download personal data export (GDPR)
+  downloadAllData: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_BASE_URL}/auth/me/export`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Download failed' }));
+      throw new ApiError(response.status, error.error || 'Download failed');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `whiskey-canon-data-export-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  // Download tasting history as CSV
+  downloadTastingsCSV: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_BASE_URL}/auth/me/export/tastings?format=csv`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Download failed' }));
+      throw new ApiError(response.status, error.error || 'Download failed');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tasting-history-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  // Download tasting history as PDF (generates printable HTML)
+  downloadTastingsPDF: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_BASE_URL}/auth/me/export/tastings?format=json`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Download failed' }));
+      throw new ApiError(response.status, error.error || 'Download failed');
+    }
+    const data = await response.json();
+
+    // Generate printable HTML
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tasting History - Whiskey Canon</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto; }
+    h1 { color: #333; border-bottom: 2px solid #d97706; padding-bottom: 10px; }
+    .export-date { color: #666; font-size: 14px; margin-bottom: 30px; }
+    .tasting { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; page-break-inside: avoid; }
+    .tasting-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
+    .whiskey-name { font-size: 18px; font-weight: bold; color: #333; }
+    .distillery { color: #666; font-size: 14px; }
+    .date { color: #999; font-size: 12px; }
+    .session { color: #666; font-size: 13px; margin-top: 4px; }
+    .scores { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 15px 0; padding: 15px; background: #f9f9f9; border-radius: 6px; }
+    .score { text-align: center; }
+    .score-value { font-size: 24px; font-weight: bold; color: #d97706; }
+    .score-label { font-size: 11px; color: #666; text-transform: uppercase; }
+    .notes { margin-top: 15px; }
+    .note-section { margin-bottom: 10px; }
+    .note-label { font-weight: 600; color: #444; font-size: 13px; }
+    .note-text { color: #555; font-size: 14px; margin-top: 2px; }
+    .whiskey-details { color: #888; font-size: 13px; margin-top: 4px; }
+    @media print { body { padding: 20px; } .tasting { border: 1px solid #ccc; } }
+  </style>
+</head>
+<body>
+  <h1>Tasting History</h1>
+  <div class="export-date">Exported on ${new Date(data.exportDate).toLocaleDateString()}</div>
+  ${data.tastings.map((t: { date: string; sessionName: string; whiskeyName: string; distillery: string; age: number | string; proof: number | string; noseScore: number; palateScore: number; finishScore: number; overallScore: number; totalScore: number; noseNotes?: string; palateNotes?: string; finishNotes?: string; generalNotes?: string; identityGuess?: string }) => `
+    <div class="tasting">
+      <div class="tasting-header">
+        <div>
+          <div class="whiskey-name">${t.whiskeyName || 'Unknown Whiskey'}</div>
+          <div class="distillery">${t.distillery || ''}</div>
+          <div class="whiskey-details">${t.age ? `${t.age} years` : ''} ${t.proof ? `• ${t.proof} proof` : ''}</div>
+          <div class="session">Session: ${t.sessionName}</div>
+        </div>
+        <div class="date">${t.date ? new Date(t.date).toLocaleDateString() : ''}</div>
+      </div>
+      <div class="scores">
+        <div class="score"><div class="score-value">${t.noseScore}</div><div class="score-label">Nose</div></div>
+        <div class="score"><div class="score-value">${t.palateScore}</div><div class="score-label">Palate</div></div>
+        <div class="score"><div class="score-value">${t.finishScore}</div><div class="score-label">Finish</div></div>
+        <div class="score"><div class="score-value">${t.overallScore}</div><div class="score-label">Overall</div></div>
+        <div class="score"><div class="score-value">${t.totalScore.toFixed(1)}</div><div class="score-label">Total</div></div>
+      </div>
+      ${(t.noseNotes || t.palateNotes || t.finishNotes || t.generalNotes) ? `
+        <div class="notes">
+          ${t.noseNotes ? `<div class="note-section"><div class="note-label">Nose Notes</div><div class="note-text">${t.noseNotes}</div></div>` : ''}
+          ${t.palateNotes ? `<div class="note-section"><div class="note-label">Palate Notes</div><div class="note-text">${t.palateNotes}</div></div>` : ''}
+          ${t.finishNotes ? `<div class="note-section"><div class="note-label">Finish Notes</div><div class="note-text">${t.finishNotes}</div></div>` : ''}
+          ${t.generalNotes ? `<div class="note-section"><div class="note-label">General Notes</div><div class="note-text">${t.generalNotes}</div></div>` : ''}
+        </div>
+      ` : ''}
+      ${t.identityGuess ? `<div class="note-section"><div class="note-label">Identity Guess</div><div class="note-text">${t.identityGuess}</div></div>` : ''}
+    </div>
+  `).join('')}
+  ${data.tastings.length === 0 ? '<p style="color: #666; text-align: center; padding: 40px;">No tasting notes yet.</p>' : ''}
+</body>
+</html>`;
+
+    // Open print dialog
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  },
+};
+
 export const socialApi = {
   // Follow system
   follow: (userId: string) =>

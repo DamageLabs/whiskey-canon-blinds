@@ -501,6 +501,297 @@ router.delete('/me/avatar', authenticateUser, async (req: AuthRequest, res: Resp
   }
 });
 
+// Export all personal data (GDPR compliance)
+router.get('/me/export', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    // Get user data
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get all sessions where user is moderator
+    const moderatedSessions = await db.query.sessions.findMany({
+      where: eq(schema.sessions.moderatorId, userId),
+    });
+
+    // Get all participations
+    const participations = await db.query.participants.findMany({
+      where: eq(schema.participants.userId, userId),
+    });
+
+    // Get all scores for user's participations
+    const participantIds = participations.map(p => p.id);
+    const allScores = participantIds.length > 0
+      ? await db.select().from(schema.scores).where(
+          // Get scores for all participant IDs
+          eq(schema.scores.participantId, participantIds[0])
+        )
+      : [];
+
+    // For multiple participant IDs, fetch all scores
+    const userScores: typeof allScores = [];
+    for (const pid of participantIds) {
+      const scores = await db.query.scores.findMany({
+        where: eq(schema.scores.participantId, pid),
+      });
+      userScores.push(...scores);
+    }
+
+    // Get whiskey details for scores
+    const whiskeyIds = [...new Set(userScores.map(s => s.whiskeyId))];
+    const whiskeys: Record<string, typeof schema.whiskeys.$inferSelect> = {};
+    for (const wid of whiskeyIds) {
+      const whiskey = await db.query.whiskeys.findFirst({
+        where: eq(schema.whiskeys.id, wid),
+      });
+      if (whiskey) whiskeys[wid] = whiskey;
+    }
+
+    // Get session details
+    const sessionIds = [...new Set([
+      ...participations.map(p => p.sessionId),
+      ...moderatedSessions.map(s => s.id),
+    ])];
+    const sessionsMap: Record<string, typeof schema.sessions.$inferSelect> = {};
+    for (const sid of sessionIds) {
+      const session = await db.query.sessions.findFirst({
+        where: eq(schema.sessions.id, sid),
+      });
+      if (session) sessionsMap[sid] = session;
+    }
+
+    // Get followers and following
+    const followers = await db.query.follows.findMany({
+      where: eq(schema.follows.followingId, userId),
+    });
+    const following = await db.query.follows.findMany({
+      where: eq(schema.follows.followerId, userId),
+    });
+
+    // Build export data
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      account: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        bio: user.bio,
+        favoriteCategory: user.favoriteCategory,
+        experienceLevel: user.experienceLevel,
+        isProfilePublic: user.isProfilePublic,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+      social: {
+        followersCount: followers.length,
+        followingCount: following.length,
+        followers: followers.map(f => ({ id: f.followerId, followedAt: f.createdAt })),
+        following: following.map(f => ({ id: f.followingId, followedAt: f.createdAt })),
+      },
+      sessions: {
+        moderated: moderatedSessions.map(s => ({
+          id: s.id,
+          name: s.name,
+          theme: s.theme,
+          status: s.status,
+          scheduledAt: s.scheduledAt,
+          createdAt: s.createdAt,
+        })),
+        participated: participations.map(p => {
+          const session = sessionsMap[p.sessionId];
+          return {
+            sessionId: p.sessionId,
+            sessionName: session?.name,
+            joinedAt: p.joinedAt,
+            status: p.status,
+          };
+        }),
+      },
+      tastingNotes: userScores.map(score => {
+        const whiskey = whiskeys[score.whiskeyId];
+        const session = sessionsMap[score.sessionId];
+        return {
+          id: score.id,
+          session: {
+            id: score.sessionId,
+            name: session?.name,
+          },
+          whiskey: {
+            id: score.whiskeyId,
+            name: whiskey?.name,
+            distillery: whiskey?.distillery,
+            age: whiskey?.age,
+            proof: whiskey?.proof,
+          },
+          scores: {
+            nose: score.nose,
+            palate: score.palate,
+            finish: score.finish,
+            overall: score.overall,
+            total: score.totalScore,
+          },
+          notes: {
+            nose: score.noseNotes,
+            palate: score.palateNotes,
+            finish: score.finishNotes,
+            general: score.generalNotes,
+          },
+          identityGuess: score.identityGuess,
+          isPublic: score.isPublic,
+          lockedAt: score.lockedAt,
+        };
+      }),
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="whiskey-canon-data-export-${new Date().toISOString().split('T')[0]}.json"`);
+    return res.json(exportData);
+  } catch (error) {
+    console.error('Export data error:', error);
+    return res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// Export tasting history as CSV or JSON
+router.get('/me/export/tastings', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const format = (req.query.format as string) || 'csv';
+
+    // Get all participations for user
+    const participations = await db.query.participants.findMany({
+      where: eq(schema.participants.userId, userId),
+    });
+
+    // Get all scores for user's participations
+    const participantIds = participations.map(p => p.id);
+    const userScores: (typeof schema.scores.$inferSelect)[] = [];
+    for (const pid of participantIds) {
+      const scores = await db.query.scores.findMany({
+        where: eq(schema.scores.participantId, pid),
+      });
+      userScores.push(...scores);
+    }
+
+    // Get whiskey and session details
+    const whiskeyIds = [...new Set(userScores.map(s => s.whiskeyId))];
+    const sessionIds = [...new Set(userScores.map(s => s.sessionId))];
+
+    const whiskeys: Record<string, typeof schema.whiskeys.$inferSelect> = {};
+    const sessions: Record<string, typeof schema.sessions.$inferSelect> = {};
+
+    for (const wid of whiskeyIds) {
+      const whiskey = await db.query.whiskeys.findFirst({
+        where: eq(schema.whiskeys.id, wid),
+      });
+      if (whiskey) whiskeys[wid] = whiskey;
+    }
+
+    for (const sid of sessionIds) {
+      const session = await db.query.sessions.findFirst({
+        where: eq(schema.sessions.id, sid),
+      });
+      if (session) sessions[sid] = session;
+    }
+
+    // Build tasting data
+    const tastings = userScores.map(score => {
+      const whiskey = whiskeys[score.whiskeyId];
+      const session = sessions[score.sessionId];
+      return {
+        date: score.lockedAt ? new Date(score.lockedAt).toISOString().split('T')[0] : '',
+        sessionName: session?.name || '',
+        whiskeyName: whiskey?.name || '',
+        distillery: whiskey?.distillery || '',
+        age: whiskey?.age || '',
+        proof: whiskey?.proof || '',
+        noseScore: score.nose,
+        palateScore: score.palate,
+        finishScore: score.finish,
+        overallScore: score.overall,
+        totalScore: score.totalScore,
+        noseNotes: score.noseNotes || '',
+        palateNotes: score.palateNotes || '',
+        finishNotes: score.finishNotes || '',
+        generalNotes: score.generalNotes || '',
+        identityGuess: score.identityGuess || '',
+      };
+    });
+
+    // Sort by date descending
+    tastings.sort((a, b) => b.date.localeCompare(a.date));
+
+    if (format === 'csv') {
+      // Generate CSV
+      const headers = [
+        'Date',
+        'Session',
+        'Whiskey',
+        'Distillery',
+        'Age',
+        'Proof',
+        'Nose Score',
+        'Palate Score',
+        'Finish Score',
+        'Overall Score',
+        'Total Score',
+        'Nose Notes',
+        'Palate Notes',
+        'Finish Notes',
+        'General Notes',
+        'Identity Guess',
+      ];
+
+      const escapeCSV = (value: string | number | null | undefined): string => {
+        const str = String(value ?? '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const rows = tastings.map(t => [
+        t.date,
+        t.sessionName,
+        t.whiskeyName,
+        t.distillery,
+        t.age,
+        t.proof,
+        t.noseScore,
+        t.palateScore,
+        t.finishScore,
+        t.overallScore,
+        t.totalScore,
+        t.noseNotes,
+        t.palateNotes,
+        t.finishNotes,
+        t.generalNotes,
+        t.identityGuess,
+      ].map(escapeCSV).join(','));
+
+      const csv = [headers.join(','), ...rows].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="tasting-history-${new Date().toISOString().split('T')[0]}.csv"`);
+      return res.send(csv);
+    } else {
+      // Return JSON
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="tasting-history-${new Date().toISOString().split('T')[0]}.json"`);
+      return res.json({ tastings, exportDate: new Date().toISOString() });
+    }
+  } catch (error) {
+    console.error('Export tastings error:', error);
+    return res.status(500).json({ error: 'Failed to export tasting history' });
+  }
+});
+
 // Update profile (bio, favorite category, experience level)
 router.patch('/me/profile', authenticateUser, async (req: AuthRequest, res: Response) => {
   try {

@@ -7,6 +7,7 @@ import { Button, Input, Card, CardHeader, CardContent } from '@/components/ui';
 import { TastingNoteCard } from '@/components/social';
 import { useAuthStore, type ExperienceLevel, type WhiskeyCategory } from '@/store/authStore';
 import { useSocialStore } from '@/store/socialStore';
+import { dataExportApi } from '@/services/api';
 import { validateEmail } from '@/utils/validation';
 
 const WHISKEY_CATEGORIES: { value: WhiskeyCategory | ''; label: string }[] = [
@@ -80,6 +81,7 @@ export function ProfilePage() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isProfilePublic, setIsProfilePublic] = useState(user?.isProfilePublic ?? true);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
+  const [isExporting, setIsExporting] = useState<'all' | 'csv' | 'pdf' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch shareable scores on mount
@@ -849,6 +851,96 @@ export function ProfilePage() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Data & Privacy Section */}
+        <Card variant="elevated" className="mb-6">
+          <CardHeader
+            title="Data & Privacy"
+            description="Export your data for personal records or GDPR compliance"
+          />
+          <CardContent>
+            <div className="space-y-4">
+              {/* Export All Data */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-zinc-100">Export All Personal Data</p>
+                  <p className="text-sm text-zinc-400">
+                    Download all your account data (GDPR compliant)
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isExporting !== null}
+                  onClick={async () => {
+                    setIsExporting('all');
+                    setError(null);
+                    try {
+                      await dataExportApi.downloadAllData();
+                      setSuccessMessage('Data export downloaded successfully');
+                    } catch (err) {
+                      setError((err as Error).message || 'Failed to export data');
+                    } finally {
+                      setIsExporting(null);
+                    }
+                  }}
+                >
+                  {isExporting === 'all' ? 'Exporting...' : 'Download JSON'}
+                </Button>
+              </div>
+
+              {/* Export Tasting History */}
+              <div className="pt-4 border-t border-zinc-700">
+                <div className="mb-3">
+                  <p className="text-zinc-100">Export Tasting History</p>
+                  <p className="text-sm text-zinc-400">
+                    Download your tasting notes and scores
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={isExporting !== null}
+                    onClick={async () => {
+                      setIsExporting('csv');
+                      setError(null);
+                      try {
+                        await dataExportApi.downloadTastingsCSV();
+                        setSuccessMessage('Tasting history CSV downloaded');
+                      } catch (err) {
+                        setError((err as Error).message || 'Failed to export');
+                      } finally {
+                        setIsExporting(null);
+                      }
+                    }}
+                  >
+                    {isExporting === 'csv' ? 'Exporting...' : 'Download CSV'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={isExporting !== null}
+                    onClick={async () => {
+                      setIsExporting('pdf');
+                      setError(null);
+                      try {
+                        await dataExportApi.downloadTastingsPDF();
+                        setSuccessMessage('PDF print dialog opened');
+                      } catch (err) {
+                        setError((err as Error).message || 'Failed to export');
+                      } finally {
+                        setIsExporting(null);
+                      }
+                    }}
+                  >
+                    {isExporting === 'pdf' ? 'Preparing...' : 'Print/Save PDF'}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

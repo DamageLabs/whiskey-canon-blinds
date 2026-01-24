@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Data export and GDPR compliance features
+  - Export all personal data as JSON (account, sessions, scores, social data)
+  - Download tasting history as CSV spreadsheet
+  - Print/save tasting history as PDF
+  - New API endpoints: `GET /api/auth/me/export`, `GET /api/auth/me/export/tastings`
+  - Data & Privacy section on Profile page with export buttons
+
+## [9339476] - 2026-01-24
+
+### Added
 - Tasting statistics on public profiles
   - Sessions attended count
   - Whiskeys rated count
