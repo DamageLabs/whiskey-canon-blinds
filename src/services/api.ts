@@ -169,6 +169,12 @@ export const sessionsApi = {
       { method: 'POST' }
     ),
 
+  pause: (sessionId: string) =>
+    request<{ message: string }>(`/sessions/${sessionId}/pause`, { method: 'POST' }),
+
+  resume: (sessionId: string) =>
+    request<{ message: string }>(`/sessions/${sessionId}/resume`, { method: 'POST' }),
+
   end: (sessionId: string) =>
     request<{ message: string }>(`/sessions/${sessionId}/end`, { method: 'POST' }),
 

@@ -80,6 +80,9 @@ interface SessionState {
   fetchSession: (sessionId: string) => Promise<void>;
   startSession: (sessionId: string) => Promise<void>;
   advancePhase: (sessionId: string, phase: TastingPhase, whiskeyIndex?: number) => Promise<void>;
+  pauseSession: (sessionId: string) => Promise<void>;
+  resumeSession: (sessionId: string) => Promise<void>;
+  endSession: (sessionId: string) => Promise<void>;
   revealResults: (sessionId: string) => Promise<void>;
   submitScore: (data: Omit<ScoreData, 'sessionId'>) => Promise<void>;
   fetchResults: (sessionId: string) => Promise<void>;
@@ -237,6 +240,42 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
+      pauseSession: async (sessionId) => {
+        try {
+          await sessionsApi.pause(sessionId);
+          set((state) => ({
+            session: state.session ? { ...state.session, status: 'paused' } : null,
+          }));
+        } catch (error) {
+          set({ error: (error as Error).message });
+          throw error;
+        }
+      },
+
+      resumeSession: async (sessionId) => {
+        try {
+          await sessionsApi.resume(sessionId);
+          set((state) => ({
+            session: state.session ? { ...state.session, status: 'active' } : null,
+          }));
+        } catch (error) {
+          set({ error: (error as Error).message });
+          throw error;
+        }
+      },
+
+      endSession: async (sessionId) => {
+        try {
+          await sessionsApi.end(sessionId);
+          set((state) => ({
+            session: state.session ? { ...state.session, status: 'completed' } : null,
+          }));
+        } catch (error) {
+          set({ error: (error as Error).message });
+          throw error;
+        }
+      },
+
       revealResults: async (sessionId) => {
         try {
           await sessionsApi.reveal(sessionId);
@@ -351,9 +390,27 @@ export const useSessionStore = create<SessionState>()(
           }));
         });
 
+        onSocketEvent('session:paused', () => {
+          set((state) => ({
+            session: state.session ? { ...state.session, status: 'paused' } : null,
+          }));
+        });
+
+        onSocketEvent('session:resumed', () => {
+          set((state) => ({
+            session: state.session ? { ...state.session, status: 'active' } : null,
+          }));
+        });
+
         onSocketEvent('session:reveal', () => {
           set((state) => ({
             session: state.session ? { ...state.session, status: 'reveal' } : null,
+          }));
+        });
+
+        onSocketEvent('session:ended', () => {
+          set((state) => ({
+            session: state.session ? { ...state.session, status: 'completed' } : null,
           }));
         });
 

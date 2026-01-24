@@ -28,11 +28,13 @@ export function SessionLobbyPage() {
     error,
     fetchSession,
     startSession,
+    endSession,
     markReady,
     connectToSession,
   } = useSessionStore();
 
   const [copied, setCopied] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Fetch session data on mount
   useEffect(() => {
@@ -116,6 +118,15 @@ export function SessionLobbyPage() {
   const handleReady = async () => {
     try {
       await markReady();
+    } catch {
+      // Error handled in store
+    }
+  };
+
+  const handleEndSession = async () => {
+    try {
+      await endSession(session!.id);
+      navigate('/');
     } catch {
       // Error handled in store
     }
@@ -245,40 +256,83 @@ export function SessionLobbyPage() {
             {/* Action Buttons */}
             <div className="space-y-3">
               {isModerator ? (
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full"
-                  onClick={handleStartSession}
-                  disabled={participants.length === 0}
-                  isLoading={isLoading}
-                >
-                  Start Tasting Session
-                </Button>
+                <>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full"
+                    onClick={handleStartSession}
+                    disabled={participants.length === 0}
+                    isLoading={isLoading}
+                  >
+                    Start Tasting Session
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    onClick={() => setShowEndConfirm(true)}
+                  >
+                    Cancel Session
+                  </Button>
+                </>
               ) : (
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full"
-                  onClick={handleReady}
-                  disabled={currentParticipant?.isReady}
-                  isLoading={isLoading}
-                >
-                  {currentParticipant?.isReady ? "You're Ready!" : "I'm Ready"}
-                </Button>
+                <>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full"
+                    onClick={handleReady}
+                    disabled={currentParticipant?.isReady}
+                    isLoading={isLoading}
+                  >
+                    {currentParticipant?.isReady ? "You're Ready!" : "I'm Ready"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => navigate('/')}
+                  >
+                    Leave Session
+                  </Button>
+                </>
               )}
-
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={() => navigate('/')}
-              >
-                Leave Session
-              </Button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Cancel Session Confirmation Modal */}
+      {showEndConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card variant="elevated" className="max-w-md w-full">
+            <CardContent className="p-6">
+              <h3 className="text-xl font-bold text-zinc-100 mb-2">Cancel Session?</h3>
+              <p className="text-zinc-400 mb-6">
+                This will cancel the tasting session. All participants will be removed and no scores will be saved.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setShowEndConfirm(false)}
+                >
+                  Keep Session
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1 bg-red-600 hover:bg-red-700"
+                  onClick={() => {
+                    setShowEndConfirm(false);
+                    handleEndSession();
+                  }}
+                >
+                  Cancel Session
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
