@@ -173,7 +173,7 @@ Scores are on a 1-10 scale. The total score is a weighted average.
 
 ## License
 
-MIT
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ---
 
