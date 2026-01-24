@@ -1,5 +1,5 @@
 // Session Types
-export type SessionStatus = 'draft' | 'waiting' | 'active' | 'reveal' | 'completed';
+export type SessionStatus = 'draft' | 'waiting' | 'active' | 'paused' | 'reveal' | 'completed';
 export type WhiskeyTheme = 'bourbon' | 'rye' | 'scotch-single-malt' | 'scotch-blended' | 'irish' | 'japanese' | 'world' | 'custom';
 export type PourSize = '0.5oz' | '1oz';
 export type TastingPhase = 'pour' | 'nosing' | 'tasting-neat' | 'tasting-water' | 'scoring' | 'palate-reset';
@@ -156,6 +156,8 @@ export interface WSMessage {
 export type WSEventType =
   | 'session:updated'
   | 'session:started'
+  | 'session:paused'
+  | 'session:resumed'
   | 'session:advanced'
   | 'session:reveal'
   | 'session:ended'

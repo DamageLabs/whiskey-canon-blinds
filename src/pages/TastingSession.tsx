@@ -24,12 +24,16 @@ export function TastingSessionPage() {
     participantToken,
     fetchSession,
     advancePhase,
+    pauseSession,
+    resumeSession,
+    endSession,
     revealResults,
     submitScore,
     connectToSession,
   } = useSessionStore();
 
   const [completedWhiskeys, setCompletedWhiskeys] = useState<number[]>([]);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Fetch session on mount
   useEffect(() => {
@@ -45,10 +49,12 @@ export function TastingSessionPage() {
     }
   }, [participantToken, sessionId, isModerator, connectToSession]);
 
-  // Redirect to reveal when status changes
+  // Redirect based on session status
   useEffect(() => {
     if (session?.status === 'reveal') {
       navigate(`/session/${sessionId}/reveal`);
+    } else if (session?.status === 'completed') {
+      navigate('/');
     }
   }, [session?.status, sessionId, navigate]);
 
@@ -122,6 +128,39 @@ export function TastingSessionPage() {
     }
   };
 
+  const handlePauseSession = async () => {
+    if (sessionId) {
+      try {
+        await pauseSession(sessionId);
+      } catch {
+        // Error handled in store
+      }
+    }
+  };
+
+  const handleEndSession = async () => {
+    if (sessionId) {
+      try {
+        await endSession(sessionId);
+        navigate('/');
+      } catch {
+        // Error handled in store
+      }
+    }
+  };
+
+  const handleResumeSession = async () => {
+    if (sessionId) {
+      try {
+        await resumeSession(sessionId);
+      } catch {
+        // Error handled in store
+      }
+    }
+  };
+
+  const isPaused = session?.status === 'paused';
+
   const allScoresLocked = completedWhiskeys.length === whiskeys.length;
 
   return (
@@ -138,9 +177,17 @@ export function TastingSessionPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => navigate(`/session/${sessionId}/lobby`)}
+                onClick={handlePauseSession}
               >
                 Pause
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowEndConfirm(true)}
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              >
+                End
               </Button>
             </div>
           )}
@@ -282,6 +329,15 @@ export function TastingSessionPage() {
                     >
                       Reveal Results
                     </Button>
+                    <hr className="border-zinc-700 my-2" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      onClick={() => setShowEndConfirm(true)}
+                    >
+                      End Session
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -289,6 +345,76 @@ export function TastingSessionPage() {
           </div>
         </div>
       </div>
+
+      {/* Paused Overlay */}
+      {isPaused && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-40 p-4">
+          <Card variant="elevated" className="max-w-md w-full text-center">
+            <CardContent className="p-8">
+              <svg className="w-16 h-16 mx-auto text-amber-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-2xl font-bold text-zinc-100 mb-2">Session Paused</h3>
+              <p className="text-zinc-400 mb-6">
+                {isModerator
+                  ? 'You have paused the tasting session. Resume when ready.'
+                  : 'The host has paused the tasting session. Please wait...'}
+              </p>
+              {isModerator && (
+                <div className="flex gap-3 justify-center">
+                  <Button
+                    variant="primary"
+                    onClick={handleResumeSession}
+                    isLoading={isLoading}
+                  >
+                    Resume Session
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="text-red-400 hover:text-red-300"
+                    onClick={() => setShowEndConfirm(true)}
+                  >
+                    End Session
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* End Session Confirmation Modal */}
+      {showEndConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card variant="elevated" className="max-w-md w-full">
+            <CardContent className="p-6">
+              <h3 className="text-xl font-bold text-zinc-100 mb-2">End Session?</h3>
+              <p className="text-zinc-400 mb-6">
+                This will end the tasting session for all participants. Scores will be saved but participants will not be able to submit new scores.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setShowEndConfirm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1 bg-red-600 hover:bg-red-700"
+                  onClick={() => {
+                    setShowEndConfirm(false);
+                    handleEndSession();
+                  }}
+                >
+                  End Session
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

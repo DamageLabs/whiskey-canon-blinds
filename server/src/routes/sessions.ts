@@ -533,6 +533,106 @@ router.post('/:sessionId/reveal', authenticateAny, async (req: AuthRequest, res:
   }
 });
 
+// Pause session (moderator only)
+router.post('/:sessionId/pause', authenticateAny, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+
+    const session = await db.query.sessions.findFirst({
+      where: eq(schema.sessions.id, sessionId),
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Check if user is moderator
+    let isModerator = false;
+    if (req.userId && session.moderatorId === req.userId) {
+      isModerator = true;
+    } else if (req.participantId) {
+      const participant = await db.query.participants.findFirst({
+        where: eq(schema.participants.id, req.participantId),
+      });
+      if (participant?.userId === session.moderatorId) {
+        isModerator = true;
+      }
+    }
+
+    if (!isModerator) {
+      return res.status(403).json({ error: 'Only the moderator can pause the session' });
+    }
+
+    if (session.status !== 'active') {
+      return res.status(400).json({ error: 'Session is not active' });
+    }
+
+    const now = new Date();
+    await db.update(schema.sessions)
+      .set({ status: 'paused', updatedAt: now })
+      .where(eq(schema.sessions.id, sessionId));
+
+    // Notify all participants
+    const io = getIO();
+    io.to(sessionId).emit('session:paused', { sessionId });
+
+    return res.json({ message: 'Session paused' });
+  } catch (error) {
+    console.error('Pause session error:', error);
+    return res.status(500).json({ error: 'Failed to pause session' });
+  }
+});
+
+// Resume session (moderator only)
+router.post('/:sessionId/resume', authenticateAny, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+
+    const session = await db.query.sessions.findFirst({
+      where: eq(schema.sessions.id, sessionId),
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Check if user is moderator
+    let isModerator = false;
+    if (req.userId && session.moderatorId === req.userId) {
+      isModerator = true;
+    } else if (req.participantId) {
+      const participant = await db.query.participants.findFirst({
+        where: eq(schema.participants.id, req.participantId),
+      });
+      if (participant?.userId === session.moderatorId) {
+        isModerator = true;
+      }
+    }
+
+    if (!isModerator) {
+      return res.status(403).json({ error: 'Only the moderator can resume the session' });
+    }
+
+    if (session.status !== 'paused') {
+      return res.status(400).json({ error: 'Session is not paused' });
+    }
+
+    const now = new Date();
+    await db.update(schema.sessions)
+      .set({ status: 'active', updatedAt: now })
+      .where(eq(schema.sessions.id, sessionId));
+
+    // Notify all participants
+    const io = getIO();
+    io.to(sessionId).emit('session:resumed', { sessionId });
+
+    return res.json({ message: 'Session resumed' });
+  } catch (error) {
+    console.error('Resume session error:', error);
+    return res.status(500).json({ error: 'Failed to resume session' });
+  }
+});
+
 // End session (moderator only)
 router.post('/:sessionId/end', authenticateAny, async (req: AuthRequest, res: Response) => {
   try {
