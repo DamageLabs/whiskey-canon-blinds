@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 
+const SERVER_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
+
 export function Header() {
   const location = useLocation();
   const { isAuthenticated, isAdmin, user } = useAuthStore();
@@ -74,13 +76,27 @@ export function Header() {
               <div className="flex items-center gap-2">
                 <Link
                   to="/profile"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive('/profile')
                       ? 'bg-zinc-800 text-amber-500'
                       : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
                   }`}
                 >
-                  {user?.displayName}
+                  {/* Avatar */}
+                  <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden flex items-center justify-center flex-shrink-0">
+                    {user?.avatarUrl ? (
+                      <img
+                        src={`${SERVER_URL}${user.avatarUrl}`}
+                        alt={user.displayName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs text-zinc-400">
+                        {user?.displayName?.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <span className="hidden sm:inline">{user?.displayName}</span>
                 </Link>
                 <Link
                   to="/logout"

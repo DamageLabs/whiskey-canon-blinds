@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { validateEmail } from '@/utils/validation';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const SERVER_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
 
 const displayNameSchema = z.object({
   displayName: z.string().min(2, 'Name must be at least 2 characters').max(30, 'Name must be 30 characters or less'),
@@ -41,6 +42,8 @@ export function ProfilePage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const displayNameForm = useForm<DisplayNameFormData>({
     resolver: zodResolver(displayNameSchema),
@@ -68,6 +71,94 @@ export function ProfilePage() {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     };
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB.');
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to upload avatar');
+      }
+
+      setUser({ ...user, avatarUrl: result.avatarUrl });
+      setSuccessMessage('Profile photo updated successfully');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsUploadingAvatar(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!user.avatarUrl) return;
+
+    setIsUploadingAvatar(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to delete avatar');
+      }
+
+      setUser({ ...user, avatarUrl: null });
+      setSuccessMessage('Profile photo removed successfully');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   const handleDisplayNameSubmit = async (data: DisplayNameFormData) => {
@@ -180,6 +271,80 @@ export function ProfilePage() {
             <p className="text-red-400">{error}</p>
           </div>
         )}
+
+        {/* Profile Photo Section */}
+        <Card variant="elevated" className="mb-6">
+          <CardHeader
+            title="Profile Photo"
+            description="Upload a photo to personalize your profile"
+          />
+          <CardContent>
+            <div className="flex items-center gap-6">
+              {/* Avatar Preview */}
+              <div className="relative">
+                <div
+                  onClick={handleAvatarClick}
+                  className="w-24 h-24 rounded-full bg-zinc-800 border-2 border-zinc-700 overflow-hidden cursor-pointer hover:border-amber-500 transition-colors flex items-center justify-center"
+                >
+                  {user.avatarUrl ? (
+                    <img
+                      src={`${SERVER_URL}${user.avatarUrl}`}
+                      alt={user.displayName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-3xl text-zinc-500">
+                      {user.displayName.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                {isUploadingAvatar && (
+                  <div className="absolute inset-0 bg-zinc-900/80 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload Controls */}
+              <div className="flex-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+                <div className="flex gap-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleAvatarClick}
+                    disabled={isUploadingAvatar}
+                  >
+                    Upload Photo
+                  </Button>
+                  {user.avatarUrl && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleAvatarDelete}
+                      disabled={isUploadingAvatar}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-500 mt-2">
+                  JPEG, PNG, GIF, or WebP. Max 5MB.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Display Name Section */}
         <Card variant="elevated" className="mb-6">

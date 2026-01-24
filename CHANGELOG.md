@@ -12,11 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Change display name
   - Change email address (requires password confirmation)
   - Change password (invalidates all refresh tokens for security)
+  - Upload, change, or remove profile photo
 - Profile link in header navigation (click username to access)
+- Profile photo upload functionality
+  - Supports JPEG, PNG, GIF, and WebP formats (max 5MB)
+  - Avatar displayed in header navigation and profile page
+  - Automatic cleanup of old avatars when uploading new ones
 - `setUser` action in auth store for updating user state
 
 ### Changed
-- Header now shows clickable username linking to profile page
+- Header now shows avatar and clickable username linking to profile page
 
 ## [0.1.0] - 2026-01-24
 
