@@ -265,4 +265,126 @@ router.get('/me', authenticateUser, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Update display name
+router.patch('/me/display-name', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const { displayName } = req.body;
+
+    if (!displayName || typeof displayName !== 'string') {
+      return res.status(400).json({ error: 'Display name is required' });
+    }
+
+    const trimmedName = displayName.trim();
+    if (trimmedName.length < 2 || trimmedName.length > 30) {
+      return res.status(400).json({ error: 'Display name must be between 2 and 30 characters' });
+    }
+
+    await db.update(schema.users)
+      .set({ displayName: trimmedName })
+      .where(eq(schema.users.id, req.userId!));
+
+    return res.json({ message: 'Display name updated successfully', displayName: trimmedName });
+  } catch (error) {
+    console.error('Update display name error:', error);
+    return res.status(500).json({ error: 'Failed to update display name' });
+  }
+});
+
+// Update email
+router.patch('/me/email', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and current password are required' });
+    }
+
+    // Validate new email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: emailValidation.error });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    // Get current user
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, req.userId!),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    // Check if email is already taken
+    const existingUser = await db.query.users.findFirst({
+      where: eq(schema.users.email, normalizedEmail),
+    });
+
+    if (existingUser && existingUser.id !== req.userId) {
+      return res.status(409).json({ error: 'Email is already in use' });
+    }
+
+    await db.update(schema.users)
+      .set({ email: normalizedEmail })
+      .where(eq(schema.users.id, req.userId!));
+
+    return res.json({ message: 'Email updated successfully', email: normalizedEmail });
+  } catch (error) {
+    console.error('Update email error:', error);
+    return res.status(500).json({ error: 'Failed to update email' });
+  }
+});
+
+// Update password
+router.patch('/me/password', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    // Get current user
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, req.userId!),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await db.update(schema.users)
+      .set({ passwordHash })
+      .where(eq(schema.users.id, req.userId!));
+
+    // Invalidate all refresh tokens for security
+    await db.delete(schema.refreshTokens).where(eq(schema.refreshTokens.userId, req.userId!));
+
+    return res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Update password error:', error);
+    return res.status(500).json({ error: 'Failed to update password' });
+  }
+});
+
 export default router;

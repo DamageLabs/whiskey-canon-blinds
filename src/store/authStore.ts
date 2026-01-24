@@ -24,6 +24,7 @@ interface AuthState {
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   setLoading: (loading: boolean) => void;
+  setUser: (user: User) => void;
   clearError: () => void;
 }
 
@@ -142,6 +143,8 @@ export const useAuthStore = create<AuthState>()(
         },
 
         setLoading: (loading) => set({ isLoading: loading }),
+
+        setUser: (user) => set({ user }),
 
         clearError: () => set({ error: null }),
       }),
