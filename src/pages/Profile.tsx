@@ -1,10 +1,12 @@
-import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input, Card, CardHeader, CardContent } from '@/components/ui';
+import { TastingNoteCard } from '@/components/social';
 import { useAuthStore, type ExperienceLevel, type WhiskeyCategory } from '@/store/authStore';
+import { useSocialStore } from '@/store/socialStore';
 import { validateEmail } from '@/utils/validation';
 
 const WHISKEY_CATEGORIES: { value: WhiskeyCategory | ''; label: string }[] = [
@@ -64,12 +66,35 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 export function ProfilePage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, setUser } = useAuthStore();
+  const {
+    shareableScores,
+    isLoadingShareable,
+    fetchShareableScores,
+    toggleScoreVisibility,
+    togglePrivacy,
+  } = useSocialStore();
   const [activeSection, setActiveSection] = useState<'name' | 'email' | 'password' | 'profile' | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isProfilePublic, setIsProfilePublic] = useState(user?.isProfilePublic ?? true);
+  const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch shareable scores on mount
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchShareableScores();
+    }
+  }, [isAuthenticated, fetchShareableScores]);
+
+  // Sync isProfilePublic with user state
+  useEffect(() => {
+    if (user?.isProfilePublic !== undefined) {
+      setIsProfilePublic(user.isProfilePublic);
+    }
+  }, [user?.isProfilePublic]);
 
   const displayNameForm = useForm<DisplayNameFormData>({
     resolver: zodResolver(displayNameSchema),
@@ -708,6 +733,120 @@ export function ProfilePage() {
                 >
                   Change
                 </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Public Profile Section */}
+        <Card variant="elevated" className="mb-6">
+          <CardHeader
+            title="Public Profile"
+            description="Manage your public presence"
+          />
+          <CardContent>
+            <div className="space-y-4">
+              {/* View Public Profile Link */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-zinc-100">View Public Profile</p>
+                  <p className="text-sm text-zinc-400">See how others view your profile</p>
+                </div>
+                <Link to={`/user/${user.id}`}>
+                  <Button variant="secondary" size="sm">
+                    View Profile
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Privacy Toggle */}
+              <div className="flex items-center justify-between pt-4 border-t border-zinc-700">
+                <div>
+                  <p className="text-zinc-100">Profile Privacy</p>
+                  <p className="text-sm text-zinc-400">
+                    {isProfilePublic
+                      ? 'Your profile is visible to everyone'
+                      : 'Only followers can see your full profile'}
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    setIsTogglingPrivacy(true);
+                    try {
+                      await togglePrivacy(!isProfilePublic);
+                      setIsProfilePublic(!isProfilePublic);
+                      setSuccessMessage(
+                        isProfilePublic
+                          ? 'Profile is now private'
+                          : 'Profile is now public'
+                      );
+                    } catch {
+                      setError('Failed to update privacy setting');
+                    } finally {
+                      setIsTogglingPrivacy(false);
+                    }
+                  }}
+                  disabled={isTogglingPrivacy}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    isProfilePublic ? 'bg-amber-500' : 'bg-zinc-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isProfilePublic ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Shared Tasting Notes Section */}
+        <Card variant="elevated" className="mb-6">
+          <CardHeader
+            title="Tasting Notes"
+            description="Manage which tasting notes appear on your public profile"
+          />
+          <CardContent>
+            {isLoadingShareable ? (
+              <div className="text-center py-4 text-zinc-400">Loading...</div>
+            ) : shareableScores.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-zinc-400">No completed sessions yet.</p>
+                <p className="text-sm text-zinc-500 mt-1">
+                  Complete a tasting session to share your notes.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {shareableScores.map((score) => (
+                  <TastingNoteCard
+                    key={score.id}
+                    note={{
+                      id: score.id,
+                      whiskey: score.whiskey,
+                      session: score.session,
+                      scores: score.scores,
+                      notes: score.notes,
+                      lockedAt: score.lockedAt,
+                    }}
+                    showShareButton={true}
+                    isPublic={score.isPublic}
+                    onToggleShare={async (isPublic) => {
+                      try {
+                        await toggleScoreVisibility(score.id, isPublic);
+                        setSuccessMessage(
+                          isPublic
+                            ? 'Note shared to profile'
+                            : 'Note removed from profile'
+                        );
+                      } catch {
+                        setError('Failed to update note visibility');
+                      }
+                    }}
+                  />
+                ))}
               </div>
             )}
           </CardContent>

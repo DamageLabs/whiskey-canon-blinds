@@ -72,7 +72,18 @@ export const authApi = {
     request<{ accessToken: string }>('/auth/refresh', { method: 'POST' }),
 
   me: () =>
-    request<{ id: string; email: string; displayName: string; role: UserRole; createdAt: string }>('/auth/me'),
+    request<{
+      id: string;
+      email: string;
+      displayName: string;
+      role: UserRole;
+      avatarUrl?: string | null;
+      bio?: string | null;
+      favoriteCategory?: string | null;
+      experienceLevel?: string | null;
+      isProfilePublic?: boolean;
+      createdAt: string;
+    }>('/auth/me'),
 };
 
 // Sessions API
@@ -250,6 +261,157 @@ export const participantsApi = {
       isReady: boolean;
       currentWhiskeyIndex: number;
     }>('/participants/me'),
+};
+
+// Social API
+export interface PublicProfileResponse {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  favoriteCategory?: string | null;
+  experienceLevel?: string | null;
+  isProfilePublic: boolean;
+  isOwner: boolean;
+  isFollowing: boolean;
+  isPrivate?: boolean;
+  stats: {
+    followers: number;
+    following: number;
+    publicNotes: number;
+  };
+}
+
+export interface UserListItemResponse {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  followedAt: string;
+}
+
+export interface PaginatedResponse<T> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface FollowersResponse extends PaginatedResponse<UserListItemResponse> {
+  followers: UserListItemResponse[];
+}
+
+export interface FollowingResponse extends PaginatedResponse<UserListItemResponse> {
+  following: UserListItemResponse[];
+}
+
+export interface PublicTastingNoteResponse {
+  id: string;
+  whiskey: {
+    id: string;
+    name: string;
+    distillery: string;
+    age?: number;
+    proof: number;
+  };
+  session: {
+    id: string;
+    name: string;
+  };
+  scores: {
+    nose: number;
+    palate: number;
+    finish: number;
+    overall: number;
+    total: number;
+  };
+  notes: {
+    nose?: string;
+    palate?: string;
+    finish?: string;
+    general?: string;
+  };
+  identityGuess?: string;
+  lockedAt: string;
+}
+
+export interface PublicNotesResponse extends PaginatedResponse<PublicTastingNoteResponse> {
+  notes: PublicTastingNoteResponse[];
+}
+
+export interface ShareableScoreResponse {
+  id: string;
+  whiskey: {
+    id: string;
+    name: string;
+    distillery: string;
+    age?: number;
+    proof: number;
+  };
+  session: {
+    id: string;
+    name: string;
+    status: string;
+  };
+  scores: {
+    nose: number;
+    palate: number;
+    finish: number;
+    overall: number;
+    total: number;
+  };
+  notes: {
+    nose?: string;
+    palate?: string;
+    finish?: string;
+    general?: string;
+  };
+  isPublic: boolean;
+  lockedAt: string;
+}
+
+export const socialApi = {
+  // Follow system
+  follow: (userId: string) =>
+    request<{ message: string }>(`/social/follow/${userId}`, { method: 'POST' }),
+
+  unfollow: (userId: string) =>
+    request<{ message: string }>(`/social/follow/${userId}`, { method: 'DELETE' }),
+
+  getFollowers: (userId: string, page = 1, limit = 20) =>
+    request<FollowersResponse>(`/social/followers/${userId}?page=${page}&limit=${limit}`),
+
+  getFollowing: (userId: string, page = 1, limit = 20) =>
+    request<FollowingResponse>(`/social/following/${userId}?page=${page}&limit=${limit}`),
+
+  isFollowing: (userId: string) =>
+    request<{ isFollowing: boolean }>(`/social/is-following/${userId}`),
+
+  // Profile
+  getProfile: (userId: string) =>
+    request<PublicProfileResponse>(`/social/profile/${userId}`),
+
+  togglePrivacy: (isPublic: boolean) =>
+    request<{ isProfilePublic: boolean }>('/social/profile/privacy', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublic }),
+    }),
+
+  // Public notes
+  getPublicNotes: (userId: string, page = 1, limit = 10) =>
+    request<PublicNotesResponse>(`/social/profile/${userId}/notes?page=${page}&limit=${limit}`),
+
+  // Score visibility
+  toggleScoreVisibility: (scoreId: string, isPublic: boolean) =>
+    request<{ id: string; isPublic: boolean }>(`/scores/${scoreId}/visibility`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublic }),
+    }),
+
+  getShareableScores: () =>
+    request<ShareableScoreResponse[]>('/scores/shareable'),
 };
 
 export { ApiError };

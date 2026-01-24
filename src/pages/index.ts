@@ -9,3 +9,6 @@ export { RegisterPage } from './Register';
 export { LogoutPage } from './Logout';
 export { AdminPage } from './Admin';
 export { ProfilePage } from './Profile';
+export { PublicProfilePage } from './PublicProfile';
+export { FollowersPage } from './Followers';
+export { FollowingPage } from './Following';

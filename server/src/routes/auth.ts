@@ -196,6 +196,7 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
         bio: user.bio,
         favoriteCategory: user.favoriteCategory,
         experienceLevel: user.experienceLevel,
+        isProfilePublic: user.isProfilePublic ?? true,
         role: userRole,
       },
       accessToken,
@@ -299,6 +300,7 @@ router.get('/me', authenticateUser, async (req: AuthRequest, res: Response) => {
       bio: user.bio,
       favoriteCategory: user.favoriteCategory,
       experienceLevel: user.experienceLevel,
+      isProfilePublic: user.isProfilePublic ?? true,
       role: user.role || 'user',
       createdAt: user.createdAt,
     });

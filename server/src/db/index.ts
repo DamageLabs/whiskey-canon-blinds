@@ -104,7 +104,32 @@ export function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_whiskeys_session ON whiskeys(session_id);
     CREATE INDEX IF NOT EXISTS idx_scores_session ON scores(session_id);
     CREATE INDEX IF NOT EXISTS idx_scores_participant ON scores(participant_id);
+
+    -- Social features: Follows table
+    CREATE TABLE IF NOT EXISTS follows (
+      id TEXT PRIMARY KEY,
+      follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL,
+      UNIQUE(follower_id, following_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+    CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
   `);
+
+  // Add new columns to existing tables (safe to run multiple times)
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN is_profile_public INTEGER NOT NULL DEFAULT 1;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE scores ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
 
   console.log('Database initialized');
 }

@@ -11,6 +11,9 @@ import {
   LogoutPage,
   AdminPage,
   ProfilePage,
+  PublicProfilePage,
+  FollowersPage,
+  FollowingPage,
 } from '@/pages';
 import { Layout } from '@/components/layout';
 
@@ -37,6 +40,11 @@ function App() {
 
           {/* Admin */}
           <Route path="/admin" element={<AdminPage />} />
+
+          {/* Public Profiles */}
+          <Route path="/user/:userId" element={<PublicProfilePage />} />
+          <Route path="/user/:userId/followers" element={<FollowersPage />} />
+          <Route path="/user/:userId/following" element={<FollowingPage />} />
 
           {/* Active Session */}
           <Route path="/session/:sessionId/lobby" element={<SessionLobbyPage />} />

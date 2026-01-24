@@ -14,6 +14,7 @@ interface User {
   bio?: string | null;
   favoriteCategory?: WhiskeyCategory | null;
   experienceLevel?: ExperienceLevel | null;
+  isProfilePublic?: boolean;
   role: UserRole;
 }
 
@@ -116,6 +117,7 @@ export const useAuthStore = create<AuthState>()(
                 bio: user.bio,
                 favoriteCategory: user.favoriteCategory as WhiskeyCategory | null | undefined,
                 experienceLevel: user.experienceLevel as ExperienceLevel | null | undefined,
+                isProfilePublic: user.isProfilePublic ?? true,
                 role,
               },
               isAuthenticated: true,
@@ -138,6 +140,7 @@ export const useAuthStore = create<AuthState>()(
                   bio: user.bio,
                   favoriteCategory: user.favoriteCategory as WhiskeyCategory | null | undefined,
                   experienceLevel: user.experienceLevel as ExperienceLevel | null | undefined,
+                  isProfilePublic: user.isProfilePublic ?? true,
                   role,
                 },
                 isAuthenticated: true,

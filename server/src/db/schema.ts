@@ -20,6 +20,7 @@ export const users = sqliteTable('users', {
   favoriteCategory: text('favorite_category'), // Favorite whiskey category
   experienceLevel: text('experience_level'), // Tasting experience level
   role: text('role').notNull().default('user'), // 'user' or 'admin'
+  isProfilePublic: integer('is_profile_public', { mode: 'boolean' }).notNull().default(true), // Privacy toggle
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
@@ -85,6 +86,7 @@ export const scores = sqliteTable('scores', {
   finishNotes: text('finish_notes'),
   generalNotes: text('general_notes'),
   identityGuess: text('identity_guess'),
+  isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false), // Share to public profile
   lockedAt: integer('locked_at', { mode: 'timestamp' }).notNull(),
 });
 
@@ -94,6 +96,14 @@ export const refreshTokens = sqliteTable('refresh_tokens', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   token: text('token').notNull().unique(),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+// Follows table (social feature)
+export const follows = sqliteTable('follows', {
+  id: text('id').primaryKey(),
+  followerId: text('follower_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  followingId: text('following_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
@@ -108,3 +118,5 @@ export type Participant = typeof participants.$inferSelect;
 export type NewParticipant = typeof participants.$inferInsert;
 export type Score = typeof scores.$inferSelect;
 export type NewScore = typeof scores.$inferInsert;
+export type Follow = typeof follows.$inferSelect;
+export type NewFollow = typeof follows.$inferInsert;
