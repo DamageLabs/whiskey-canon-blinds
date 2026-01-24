@@ -1,175 +1,75 @@
 # Whiskey Canon Blinds
 
-A multi-user web application for hosting and participating in blind whiskey tasting sessions. Score independently, reveal together.
+A web application for hosting blind whiskey tasting sessions. Eliminate bias, taste objectively, and discover your true preferences.
 
-## Features
+## What is Blind Tasting?
 
-- **Session Management** - Create tasting sessions with 1-6 whiskeys, invite participants via unique codes
-- **Guided Tasting Protocol** - Structured phases: pour, nosing, tasting (neat), tasting (with water), scoring, palate reset
-- **Anti-Anchoring Design** - Scores are isolated until reveal; participants cannot see others' ratings
-- **Real-time Sync** - WebSocket-powered updates keep all participants synchronized
-- **Weighted Scoring** - Score nose (25%), palate (35%), finish (25%), and overall impression (15%)
-- **Dramatic Reveal** - Moderator controls when identities and scores are unveiled
-- **Admin Dashboard** - Role-based access control for user and session management
+Blind tasting removes the influence of labels, prices, and reputations. Participants evaluate whiskeys purely on their sensory qualities—nose, palate, and finish—without knowing what they're drinking. This reveals genuine preferences and often produces surprising results.
 
-## Tech Stack
+## Screenshots
 
-### Frontend
-- React 19 with TypeScript
-- Vite for development and builds
-- Tailwind CSS v4 for styling
-- Zustand for state management
-- React Router v7 for navigation
-- React Hook Form + Zod for form validation
-- Socket.io Client for real-time updates
+### Home Page
+![Home Page](screenshots/home-page.png)
 
-### Backend
-- Node.js with Express 5
-- SQLite with Drizzle ORM
-- Socket.io for WebSocket communication
-- JWT authentication (access + refresh + participant tokens)
-- bcrypt for password hashing
+Start a new tasting session or join an existing one with an invite code.
 
-## Getting Started
+### Tasting Protocol Guide
+![Tasting Protocol Guide](screenshots/tasting-protocol-guide-page.png)
 
-### Prerequisites
-- Node.js 18+
-- npm or yarn
+Built-in guide covering the complete tasting protocol, scoring system, and anti-anchoring rules.
 
-### Installation
+## Key Features
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/whiskey-canon-blinds.git
-cd whiskey-canon-blinds
-```
+### For Hosts
+- **Create Sessions** - Set up flights with 1-6 whiskeys, define themes, and invite participants
+- **Guided Protocol** - Structured phases ensure consistent tasting: pour, nose, palate (neat), palate (with water), score, palate reset
+- **Control the Flow** - Advance participants through each phase and whiskey at your pace
+- **Dramatic Reveal** - Unveil identities and scores together for maximum impact
 
-2. Install dependencies:
-```bash
-npm install
-```
+### For Participants
+- **Join Easily** - Enter a session with just an invite code
+- **Score Independently** - Your ratings are private until the reveal
+- **Tasting Notes** - Record detailed notes for each whiskey
+- **See Results** - Compare your scores against the group after reveal
 
-3. Create a `.env` file in the root directory:
-```env
-JWT_SECRET=your-secret-key-here
-JWT_REFRESH_SECRET=your-refresh-secret-here
-PARTICIPANT_TOKEN_SECRET=your-participant-secret-here
-```
+### Anti-Anchoring Design
+Scores are completely isolated until the moderator initiates the reveal. Participants cannot see others' ratings, comments, or even whether they've finished scoring. This prevents groupthink and ensures honest evaluations.
 
-4. Start the development server:
-```bash
-npm run dev
-```
-
-This starts both the frontend (http://localhost:5173) and backend (http://localhost:3001) concurrently.
-
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start both client and server in development mode |
-| `npm run dev:client` | Start only the Vite dev server |
-| `npm run dev:server` | Start only the Express server with hot reload |
-| `npm run build` | Build the frontend for production |
-| `npm run build:server` | Compile the server TypeScript |
-| `npm run lint` | Run ESLint |
-| `npm run preview` | Preview the production build |
-
-## Project Structure
-
-```
-whiskey-canon-blinds/
-├── src/                    # Frontend source
-│   ├── components/         # React components
-│   │   ├── layout/         # Header, Footer, Layout
-│   │   ├── tasting/        # Tasting-specific components
-│   │   └── ui/             # Reusable UI components
-│   ├── pages/              # Page components
-│   ├── services/           # API client
-│   ├── store/              # Zustand stores
-│   ├── types/              # TypeScript types
-│   └── utils/              # Utility functions
-├── server/                 # Backend source
-│   └── src/
-│       ├── db/             # Database schema and setup
-│       ├── middleware/     # Express middleware
-│       └── routes/         # API routes
-└── public/                 # Static assets
-```
-
-## User Roles
-
-### Moderator (Host)
-- Create and configure tasting sessions
-- Define the flight (whiskeys to be tasted)
-- Generate invite codes for participants
-- Control session progression (start, pause, advance phases)
-- Initiate the reveal when all scores are locked
-- View aggregated results
-
-### Participant
-- Join sessions via invite code
-- Follow the guided tasting protocol
-- Record notes and scores independently
-- Cannot see other participants' scores until reveal
-- View final results after reveal
-
-### Admin
-- Manage all users (view, update roles, delete)
-- Manage all sessions (view, delete)
-- Access admin dashboard at `/admin`
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Create account
-- `POST /api/auth/login` - Login
-- `POST /api/auth/refresh` - Refresh access token
-- `POST /api/auth/logout` - Logout
-
-### Sessions
-- `POST /api/sessions` - Create session (auth required)
-- `GET /api/sessions/:id` - Get session details
-- `POST /api/sessions/join` - Join session by code
-- `POST /api/sessions/:id/start` - Start session (moderator)
-- `POST /api/sessions/:id/advance` - Advance phase (moderator)
-- `POST /api/sessions/:id/reveal` - Initiate reveal (moderator)
-- `GET /api/sessions/:id/results` - Get results
-
-### Scores
-- `POST /api/scores` - Submit score (participant)
-- `POST /api/scores/ready` - Mark ready status
-
-### Admin
-- `GET /api/admin/users` - List all users
-- `PATCH /api/admin/users/:id/role` - Update user role
-- `DELETE /api/admin/users/:id` - Delete user
-- `GET /api/admin/sessions` - List all sessions
-- `DELETE /api/admin/sessions/:id` - Delete session
-
-## WebSocket Events
-
-### Client to Server
-- `join:session` - Join a session room
-- `participant:ready` - Mark participant as ready
-
-### Server to Client
-- `participant:joined` - New participant joined
-- `participant:ready` - Participant marked ready
-- `session:started` - Session has begun
-- `phase:advanced` - Phase/whiskey changed
-- `session:revealed` - Reveal initiated
+### Social Features
+- **Follow Users** - Connect with fellow enthusiasts
+- **Public Profiles** - Share your tasting history and achievements
+- **Achievements** - Earn badges for sessions attended, whiskeys rated, and more
+- **Export Data** - Download your complete tasting history (GDPR compliant)
 
 ## Scoring System
 
-| Category | Weight | Description |
-|----------|--------|-------------|
+| Category | Weight | What to Evaluate |
+|----------|--------|------------------|
 | Nose | 25% | Aroma complexity, appeal, intensity |
 | Palate | 35% | Flavor profile, balance, mouthfeel |
 | Finish | 25% | Length, evolution, pleasantness |
-| Overall | 15% | Subjective enjoyment |
+| Overall | 15% | Personal enjoyment |
 
-Scores are on a 1-10 scale. The total score is a weighted average.
+Scores use a 1-10 scale. The total is a weighted average.
+
+## Tech Stack
+
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Zustand
+- **Backend**: Node.js, Express 5, SQLite, Drizzle ORM
+- **Real-time**: Socket.io for live synchronization
+- **Auth**: JWT with refresh tokens
+
+## Getting Started
+
+See [docs.md](docs.md) for installation instructions, API documentation, and project structure.
+
+```bash
+# Quick start
+git clone https://github.com/fusion94/whiskey-canon-blinds.git
+cd whiskey-canon-blinds
+npm install
+npm run dev
+```
 
 ## License
 
