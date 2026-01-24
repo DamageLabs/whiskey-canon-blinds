@@ -8,6 +8,7 @@ interface User {
   id: string;
   email: string;
   displayName: string;
+  avatarUrl?: string | null;
   role: UserRole;
 }
 
@@ -106,6 +107,7 @@ export const useAuthStore = create<AuthState>()(
                 id: user.id,
                 email: user.email,
                 displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
                 role,
               },
               isAuthenticated: true,
@@ -124,6 +126,7 @@ export const useAuthStore = create<AuthState>()(
                   id: user.id,
                   email: user.email,
                   displayName: user.displayName,
+                  avatarUrl: user.avatarUrl,
                   role,
                 },
                 isAuthenticated: true,

@@ -18,6 +18,13 @@ data/
 *.db-journal
 *.db-wal
 
+# Uploads (keep directory structure)
+uploads/*
+!uploads/.gitkeep
+!uploads/avatars/
+uploads/avatars/*
+!uploads/avatars/.gitkeep
+
 # Environment
 .env
 .env.local

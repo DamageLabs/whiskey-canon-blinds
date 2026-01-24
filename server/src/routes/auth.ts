@@ -1,6 +1,9 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { db, schema } from '../db';
 import { eq } from 'drizzle-orm';
 import {
@@ -14,6 +17,38 @@ import {
 import { validateEmail, normalizeEmail } from '../utils/validation';
 
 const router = Router();
+
+// Configure multer for avatar uploads
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
+    // Ensure directory exists
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req: AuthRequest, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `${req.userId}-${Date.now()}${ext}`;
+    cb(null, filename);
+  },
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
+    }
+  },
+});
 
 // Register a new user
 router.post('/register', async (req: AuthRequest, res: Response) => {
@@ -157,6 +192,7 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
         id: user.id,
         email: user.email,
         displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
         role: userRole,
       },
       accessToken,
@@ -256,6 +292,7 @@ router.get('/me', authenticateUser, async (req: AuthRequest, res: Response) => {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
       role: user.role || 'user',
       createdAt: user.createdAt,
     });
@@ -384,6 +421,75 @@ router.patch('/me/password', authenticateUser, async (req: AuthRequest, res: Res
   } catch (error) {
     console.error('Update password error:', error);
     return res.status(500).json({ error: 'Failed to update password' });
+  }
+});
+
+// Upload avatar
+router.post('/me/avatar', authenticateUser, avatarUpload.single('avatar'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Get current user to check for existing avatar
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, req.userId!),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete old avatar file if exists
+    if (user.avatarUrl) {
+      const oldPath = path.join(process.cwd(), user.avatarUrl);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+    }
+
+    // Save new avatar URL
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+    await db.update(schema.users)
+      .set({ avatarUrl })
+      .where(eq(schema.users.id, req.userId!));
+
+    return res.json({ message: 'Avatar uploaded successfully', avatarUrl });
+  } catch (error) {
+    console.error('Avatar upload error:', error);
+    return res.status(500).json({ error: 'Failed to upload avatar' });
+  }
+});
+
+// Delete avatar
+router.delete('/me/avatar', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.id, req.userId!),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.avatarUrl) {
+      // Delete the file
+      const filePath = path.join(process.cwd(), user.avatarUrl);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+
+      // Clear the URL in database
+      await db.update(schema.users)
+        .set({ avatarUrl: null })
+        .where(eq(schema.users.id, req.userId!));
+    }
+
+    return res.json({ message: 'Avatar deleted successfully' });
+  } catch (error) {
+    console.error('Avatar delete error:', error);
+    return res.status(500).json({ error: 'Failed to delete avatar' });
   }
 });
 
