@@ -2,15 +2,20 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, CardContent } from '@/components/ui';
 import { useSessionStore } from '@/store/sessionStore';
+import { useAuthStore } from '@/store/authStore';
+import { socialApi } from '@/services/api';
 import { getScoreDescriptor } from '@/utils/scoring';
 
 export function RevealPage() {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
   const { session, results, isLoading, fetchSession, fetchResults, isModerator } = useSessionStore();
+  const { user, isAuthenticated } = useAuthStore();
 
   const [revealedCount, setRevealedCount] = useState(0);
   const [isRevealing, setIsRevealing] = useState(false);
+  const [sharedScores, setSharedScores] = useState<Set<string>>(new Set());
+  const [sharingScoreId, setSharingScoreId] = useState<string | null>(null);
 
   // Fetch session and results on mount
   useEffect(() => {
@@ -194,6 +199,54 @@ export function RevealPage() {
                               </div>
                             </div>
                           </div>
+
+                          {/* Share Your Score Button */}
+                          {isAuthenticated && user && result.scores && (() => {
+                            const myScore = result.scores.find(
+                              (s: { participantName?: string }) => s.participantName === user.displayName
+                            ) as { id: string } | undefined;
+                            if (!myScore) return null;
+                            const isShared = sharedScores.has(myScore.id);
+                            const isSharing = sharingScoreId === myScore.id;
+                            return (
+                              <div className="mt-4 pt-4 border-t border-zinc-700">
+                                <button
+                                  onClick={async () => {
+                                    if (isSharing) return;
+                                    setSharingScoreId(myScore.id);
+                                    try {
+                                      await socialApi.toggleScoreVisibility(myScore.id, !isShared);
+                                      if (isShared) {
+                                        setSharedScores(prev => {
+                                          const next = new Set(prev);
+                                          next.delete(myScore.id);
+                                          return next;
+                                        });
+                                      } else {
+                                        setSharedScores(prev => new Set(prev).add(myScore.id));
+                                      }
+                                    } catch (err) {
+                                      console.error('Failed to share score:', err);
+                                    } finally {
+                                      setSharingScoreId(null);
+                                    }
+                                  }}
+                                  disabled={isSharing}
+                                  className={`text-sm px-4 py-2 rounded-lg transition-colors ${
+                                    isShared
+                                      ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                                      : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
+                                  }`}
+                                >
+                                  {isSharing
+                                    ? 'Saving...'
+                                    : isShared
+                                    ? 'Shared to Profile'
+                                    : 'Share My Score to Profile'}
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </>
                       ) : (
                         <div className="py-4">

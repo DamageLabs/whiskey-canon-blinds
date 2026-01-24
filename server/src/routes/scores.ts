@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db, schema } from '../db';
 import { eq, and } from 'drizzle-orm';
-import { AuthRequest, authenticateParticipant } from '../middleware/auth';
+import { AuthRequest, authenticateParticipant, authenticateUser } from '../middleware/auth';
 import { getIO } from '../socket';
 
 const router = Router();
@@ -234,6 +234,113 @@ router.get('/my-scores/:sessionId', authenticateParticipant, async (req: AuthReq
   } catch (error) {
     console.error('Get my scores error:', error);
     return res.status(500).json({ error: 'Failed to get scores' });
+  }
+});
+
+// Toggle score visibility (share to public profile)
+router.patch('/:scoreId/visibility', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const scoreId = req.params.scoreId as string;
+    const { isPublic } = req.body;
+
+    if (typeof isPublic !== 'boolean') {
+      return res.status(400).json({ error: 'isPublic must be a boolean' });
+    }
+
+    // Get the score and verify ownership
+    const score = await db.query.scores.findFirst({
+      where: eq(schema.scores.id, scoreId),
+    });
+
+    if (!score) {
+      return res.status(404).json({ error: 'Score not found' });
+    }
+
+    // Get the participant to verify user ownership
+    const participant = await db.query.participants.findFirst({
+      where: eq(schema.participants.id, score.participantId),
+    });
+
+    if (!participant || participant.userId !== req.userId) {
+      return res.status(403).json({ error: 'You do not own this score' });
+    }
+
+    // Verify session is in reveal or completed state
+    const session = await db.query.sessions.findFirst({
+      where: eq(schema.sessions.id, score.sessionId),
+    });
+
+    if (!session || (session.status !== 'reveal' && session.status !== 'completed')) {
+      return res.status(400).json({ error: 'Scores can only be shared after the reveal phase' });
+    }
+
+    // Update visibility
+    await db
+      .update(schema.scores)
+      .set({ isPublic })
+      .where(eq(schema.scores.id, scoreId));
+
+    return res.json({ id: scoreId, isPublic });
+  } catch (error) {
+    console.error('Toggle score visibility error:', error);
+    return res.status(500).json({ error: 'Failed to update score visibility' });
+  }
+});
+
+// Get user's scores that can be shared (from completed sessions)
+router.get('/shareable', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    // Get all scores from this user's completed sessions
+    const shareableScores = await db
+      .select({
+        score: schema.scores,
+        whiskey: schema.whiskeys,
+        session: {
+          id: schema.sessions.id,
+          name: schema.sessions.name,
+          status: schema.sessions.status,
+        },
+      })
+      .from(schema.scores)
+      .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+      .innerJoin(schema.whiskeys, eq(schema.scores.whiskeyId, schema.whiskeys.id))
+      .innerJoin(schema.sessions, eq(schema.scores.sessionId, schema.sessions.id))
+      .where(and(
+        eq(schema.participants.userId, userId),
+        eq(schema.sessions.status, 'completed')
+      ));
+
+    return res.json(shareableScores.map((s) => ({
+      id: s.score.id,
+      whiskey: {
+        id: s.whiskey.id,
+        name: s.whiskey.name,
+        distillery: s.whiskey.distillery,
+        age: s.whiskey.age,
+        proof: s.whiskey.proof,
+      },
+      session: s.session,
+      scores: {
+        nose: s.score.nose,
+        palate: s.score.palate,
+        finish: s.score.finish,
+        overall: s.score.overall,
+        total: s.score.totalScore,
+      },
+      notes: {
+        nose: s.score.noseNotes,
+        palate: s.score.palateNotes,
+        finish: s.score.finishNotes,
+        general: s.score.generalNotes,
+      },
+      isPublic: s.score.isPublic,
+      lockedAt: s.score.lockedAt,
+    })));
+  } catch (error) {
+    console.error('Get shareable scores error:', error);
+    return res.status(500).json({ error: 'Failed to get shareable scores' });
   }
 });
 

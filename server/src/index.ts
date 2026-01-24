@@ -12,6 +12,7 @@ import sessionsRoutes from './routes/sessions';
 import scoresRoutes from './routes/scores';
 import participantsRoutes from './routes/participants';
 import adminRoutes from './routes/admin';
+import socialRoutes from './routes/social';
 
 // Load environment variables
 dotenv.config();
@@ -44,6 +45,7 @@ app.use('/api/sessions', sessionsRoutes);
 app.use('/api/scores', scoresRoutes);
 app.use('/api/participants', participantsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/social', socialRoutes);
 
 // Error handling
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

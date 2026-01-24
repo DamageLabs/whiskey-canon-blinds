@@ -163,3 +163,98 @@ export type WSEventType =
   | 'participant:left'
   | 'participant:ready'
   | 'score:locked';
+
+// Social Feature Types
+export interface PublicProfile {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  favoriteCategory?: string | null;
+  experienceLevel?: string | null;
+  isProfilePublic: boolean;
+  isOwner: boolean;
+  isFollowing: boolean;
+  isPrivate?: boolean;
+  stats: {
+    followers: number;
+    following: number;
+    publicNotes: number;
+  };
+}
+
+export interface UserListItem {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  followedAt: Date;
+}
+
+export interface PublicTastingNote {
+  id: string;
+  whiskey: {
+    id: string;
+    name: string;
+    distillery: string;
+    age?: number;
+    proof: number;
+  };
+  session: {
+    id: string;
+    name: string;
+  };
+  scores: {
+    nose: number;
+    palate: number;
+    finish: number;
+    overall: number;
+    total: number;
+  };
+  notes: {
+    nose?: string;
+    palate?: string;
+    finish?: string;
+    general?: string;
+  };
+  identityGuess?: string;
+  lockedAt: Date;
+}
+
+export interface ShareableScore {
+  id: string;
+  whiskey: {
+    id: string;
+    name: string;
+    distillery: string;
+    age?: number;
+    proof: number;
+  };
+  session: {
+    id: string;
+    name: string;
+    status: string;
+  };
+  scores: {
+    nose: number;
+    palate: number;
+    finish: number;
+    overall: number;
+    total: number;
+  };
+  notes: {
+    nose?: string;
+    palate?: string;
+    finish?: string;
+    general?: string;
+  };
+  isPublic: boolean;
+  lockedAt: Date;
+}
+
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
