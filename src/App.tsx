@@ -14,6 +14,7 @@ import {
   PublicProfilePage,
   FollowersPage,
   FollowingPage,
+  TastingGuidePage,
 } from '@/pages';
 import { Layout } from '@/components/layout';
 
@@ -40,6 +41,9 @@ function App() {
 
           {/* Admin */}
           <Route path="/admin" element={<AdminPage />} />
+
+          {/* Guide */}
+          <Route path="/guide" element={<TastingGuidePage />} />
 
           {/* Public Profiles */}
           <Route path="/user/:userId" element={<PublicProfilePage />} />
