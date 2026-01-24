@@ -193,6 +193,9 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
         email: user.email,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        favoriteCategory: user.favoriteCategory,
+        experienceLevel: user.experienceLevel,
         role: userRole,
       },
       accessToken,
@@ -293,6 +296,9 @@ router.get('/me', authenticateUser, async (req: AuthRequest, res: Response) => {
       email: user.email,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
+      bio: user.bio,
+      favoriteCategory: user.favoriteCategory,
+      experienceLevel: user.experienceLevel,
       role: user.role || 'user',
       createdAt: user.createdAt,
     });
@@ -490,6 +496,57 @@ router.delete('/me/avatar', authenticateUser, async (req: AuthRequest, res: Resp
   } catch (error) {
     console.error('Avatar delete error:', error);
     return res.status(500).json({ error: 'Failed to delete avatar' });
+  }
+});
+
+// Update profile (bio, favorite category, experience level)
+router.patch('/me/profile', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const { bio, favoriteCategory, experienceLevel } = req.body;
+
+    // Validate bio length
+    if (bio !== undefined && bio !== null) {
+      if (typeof bio !== 'string') {
+        return res.status(400).json({ error: 'Bio must be a string' });
+      }
+      if (bio.length > 200) {
+        return res.status(400).json({ error: 'Bio must be 200 characters or less' });
+      }
+    }
+
+    // Validate favorite category
+    const validCategories = ['bourbon', 'rye', 'scotch', 'irish', 'japanese', 'canadian', 'other', null, ''];
+    if (favoriteCategory !== undefined && !validCategories.includes(favoriteCategory)) {
+      return res.status(400).json({ error: 'Invalid whiskey category' });
+    }
+
+    // Validate experience level
+    const validLevels = ['beginner', 'intermediate', 'advanced', 'expert', null, ''];
+    if (experienceLevel !== undefined && !validLevels.includes(experienceLevel)) {
+      return res.status(400).json({ error: 'Invalid experience level' });
+    }
+
+    // Build update object
+    const updates: Record<string, string | null> = {};
+    if (bio !== undefined) updates.bio = bio || null;
+    if (favoriteCategory !== undefined) updates.favoriteCategory = favoriteCategory || null;
+    if (experienceLevel !== undefined) updates.experienceLevel = experienceLevel || null;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    await db.update(schema.users)
+      .set(updates)
+      .where(eq(schema.users.id, req.userId!));
+
+    return res.json({
+      message: 'Profile updated successfully',
+      ...updates,
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 

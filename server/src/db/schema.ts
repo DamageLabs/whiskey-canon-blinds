@@ -3,6 +3,12 @@ import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 // User roles
 export type UserRole = 'user' | 'admin';
 
+// Experience levels
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+
+// Whiskey categories
+export type WhiskeyCategory = 'bourbon' | 'rye' | 'scotch' | 'irish' | 'japanese' | 'canadian' | 'other';
+
 // Users table
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -10,6 +16,9 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash').notNull(),
   displayName: text('display_name').notNull(),
   avatarUrl: text('avatar_url'), // Profile photo URL
+  bio: text('bio'), // Short bio/tagline
+  favoriteCategory: text('favorite_category'), // Favorite whiskey category
+  experienceLevel: text('experience_level'), // Tasting experience level
   role: text('role').notNull().default('user'), // 'user' or 'admin'
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });

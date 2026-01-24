@@ -4,8 +4,27 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input, Card, CardHeader, CardContent } from '@/components/ui';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, type ExperienceLevel, type WhiskeyCategory } from '@/store/authStore';
 import { validateEmail } from '@/utils/validation';
+
+const WHISKEY_CATEGORIES: { value: WhiskeyCategory | ''; label: string }[] = [
+  { value: '', label: 'Select a category' },
+  { value: 'bourbon', label: 'Bourbon' },
+  { value: 'rye', label: 'Rye' },
+  { value: 'scotch', label: 'Scotch' },
+  { value: 'irish', label: 'Irish' },
+  { value: 'japanese', label: 'Japanese' },
+  { value: 'canadian', label: 'Canadian' },
+  { value: 'other', label: 'Other' },
+];
+
+const EXPERIENCE_LEVELS: { value: ExperienceLevel | ''; label: string }[] = [
+  { value: '', label: 'Select your level' },
+  { value: 'beginner', label: 'Beginner - Just starting my whiskey journey' },
+  { value: 'intermediate', label: 'Intermediate - I know what I like' },
+  { value: 'advanced', label: 'Advanced - Experienced taster' },
+  { value: 'expert', label: 'Expert - Connoisseur level' },
+];
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const SERVER_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
@@ -31,14 +50,21 @@ const passwordSchema = z.object({
   path: ['confirmPassword'],
 });
 
+const profileSchema = z.object({
+  bio: z.string().max(200, 'Bio must be 200 characters or less').optional(),
+  favoriteCategory: z.string().optional(),
+  experienceLevel: z.string().optional(),
+});
+
 type DisplayNameFormData = z.infer<typeof displayNameSchema>;
 type EmailFormData = z.infer<typeof emailSchema>;
 type PasswordFormData = z.infer<typeof passwordSchema>;
+type ProfileFormData = z.infer<typeof profileSchema>;
 
 export function ProfilePage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, setUser } = useAuthStore();
-  const [activeSection, setActiveSection] = useState<'name' | 'email' | 'password' | null>(null);
+  const [activeSection, setActiveSection] = useState<'name' | 'email' | 'password' | 'profile' | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,6 +84,15 @@ export function ProfilePage() {
   const passwordForm = useForm<PasswordFormData>({
     resolver: zodResolver(passwordSchema),
     defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
+  });
+
+  const profileForm = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      bio: user?.bio || '',
+      favoriteCategory: user?.favoriteCategory || '',
+      experienceLevel: user?.experienceLevel || '',
+    },
   });
 
   if (!isAuthenticated || !user) {
@@ -249,6 +284,43 @@ export function ProfilePage() {
     }
   };
 
+  const handleProfileSubmit = async (data: ProfileFormData) => {
+    setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/me/profile`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          bio: data.bio || null,
+          favoriteCategory: data.favoriteCategory || null,
+          experienceLevel: data.experienceLevel || null,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to update profile');
+      }
+
+      setUser({
+        ...user,
+        bio: result.bio,
+        favoriteCategory: result.favoriteCategory as WhiskeyCategory | null,
+        experienceLevel: result.experienceLevel as ExperienceLevel | null,
+      });
+      setSuccessMessage('Profile updated successfully');
+      setActiveSection(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex-1 p-4 md:p-8">
       <div className="max-w-2xl mx-auto">
@@ -392,6 +464,125 @@ export function ProfilePage() {
                 >
                   Change
                 </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tasting Profile Section */}
+        <Card variant="elevated" className="mb-6">
+          <CardHeader
+            title="Tasting Profile"
+            description="Share your whiskey preferences with other tasters"
+          />
+          <CardContent>
+            {activeSection === 'profile' ? (
+              <form onSubmit={profileForm.handleSubmit(handleProfileSubmit)} className="space-y-4">
+                <div>
+                  <label htmlFor="bio" className="block text-sm font-medium text-zinc-300 mb-1">
+                    Bio / Tagline
+                  </label>
+                  <textarea
+                    id="bio"
+                    rows={3}
+                    placeholder="Tell others about your whiskey journey..."
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                    {...profileForm.register('bio')}
+                  />
+                  {profileForm.formState.errors.bio && (
+                    <p className="text-sm text-red-400 mt-1">{profileForm.formState.errors.bio.message}</p>
+                  )}
+                  <p className="text-xs text-zinc-500 mt-1">Max 200 characters</p>
+                </div>
+
+                <div>
+                  <label htmlFor="favoriteCategory" className="block text-sm font-medium text-zinc-300 mb-1">
+                    Favorite Whiskey Category
+                  </label>
+                  <select
+                    id="favoriteCategory"
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    {...profileForm.register('favoriteCategory')}
+                  >
+                    {WHISKEY_CATEGORIES.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="experienceLevel" className="block text-sm font-medium text-zinc-300 mb-1">
+                    Experience Level
+                  </label>
+                  <select
+                    id="experienceLevel"
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    {...profileForm.register('experienceLevel')}
+                  >
+                    {EXPERIENCE_LEVELS.map((level) => (
+                      <option key={level.value} value={level.value}>
+                        {level.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button type="submit" variant="primary" isLoading={isLoading}>
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setActiveSection(null);
+                      setError(null);
+                      profileForm.reset({
+                        bio: user.bio || '',
+                        favoriteCategory: user.favoriteCategory || '',
+                        experienceLevel: user.experienceLevel || '',
+                      });
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="text-sm text-zinc-400 mb-1">Bio</p>
+                    <p className="text-zinc-100">{user.bio || <span className="text-zinc-500 italic">Not set</span>}</p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-zinc-400 mb-1">Favorite Category</p>
+                    <p className="text-zinc-100 capitalize">{user.favoriteCategory || <span className="text-zinc-500 italic">Not set</span>}</p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-zinc-400 mb-1">Experience Level</p>
+                    <p className="text-zinc-100 capitalize">{user.experienceLevel || <span className="text-zinc-500 italic">Not set</span>}</p>
+                  </div>
+                </div>
+                <div className="pt-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setActiveSection('profile');
+                      setError(null);
+                      setSuccessMessage(null);
+                    }}
+                  >
+                    Edit Profile
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

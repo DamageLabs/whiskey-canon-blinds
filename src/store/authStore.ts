@@ -3,12 +3,17 @@ import { persist, devtools } from 'zustand/middleware';
 import { authApi } from '@/services';
 
 export type UserRole = 'user' | 'admin';
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+export type WhiskeyCategory = 'bourbon' | 'rye' | 'scotch' | 'irish' | 'japanese' | 'canadian' | 'other';
 
 interface User {
   id: string;
   email: string;
   displayName: string;
   avatarUrl?: string | null;
+  bio?: string | null;
+  favoriteCategory?: WhiskeyCategory | null;
+  experienceLevel?: ExperienceLevel | null;
   role: UserRole;
 }
 
@@ -108,6 +113,9 @@ export const useAuthStore = create<AuthState>()(
                 email: user.email,
                 displayName: user.displayName,
                 avatarUrl: user.avatarUrl,
+                bio: user.bio,
+                favoriteCategory: user.favoriteCategory as WhiskeyCategory | null | undefined,
+                experienceLevel: user.experienceLevel as ExperienceLevel | null | undefined,
                 role,
               },
               isAuthenticated: true,
@@ -127,6 +135,9 @@ export const useAuthStore = create<AuthState>()(
                   email: user.email,
                   displayName: user.displayName,
                   avatarUrl: user.avatarUrl,
+                  bio: user.bio,
+                  favoriteCategory: user.favoriteCategory as WhiskeyCategory | null | undefined,
+                  experienceLevel: user.experienceLevel as ExperienceLevel | null | undefined,
                   role,
                 },
                 isAuthenticated: true,
