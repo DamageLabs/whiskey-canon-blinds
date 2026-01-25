@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import { db, schema } from '../db';
 import { eq, and } from 'drizzle-orm';
 import {
@@ -10,6 +11,8 @@ import {
   generateParticipantToken,
 } from '../middleware/auth';
 import { getIO } from '../socket';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production';
 
 const router = Router();
 
@@ -149,18 +152,17 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
     let isModerator = false;
     let currentParticipantId: string | null = null;
 
-    // Check via access token
+    // Check via access token (user authentication)
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       try {
         const token = authHeader.split(' ')[1];
-        const jwt = await import('jsonwebtoken');
-        const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production') as { userId: string };
+        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
         if (decoded.userId === session.moderatorId) {
           isModerator = true;
         }
-      } catch {
-        // Invalid token
+      } catch (err) {
+        console.log('Access token verification failed:', err instanceof Error ? err.message : 'Unknown error');
       }
     }
 
@@ -168,19 +170,19 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
     const participantToken = req.headers['x-participant-token'] as string;
     if (participantToken) {
       try {
-        const jwt = await import('jsonwebtoken');
-        const decoded = jwt.default.verify(participantToken, process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production') as { participantId: string };
+        const decoded = jwt.verify(participantToken, JWT_SECRET) as { participantId: string; sessionId: string };
         currentParticipantId = decoded.participantId;
 
         // Check if this participant is the moderator
         const participant = await db.query.participants.findFirst({
           where: eq(schema.participants.id, decoded.participantId),
         });
-        if (participant?.userId === session.moderatorId) {
+
+        if (participant?.userId && participant.userId === session.moderatorId) {
           isModerator = true;
         }
-      } catch {
-        // Invalid token
+      } catch (err) {
+        console.log('Participant token verification failed:', err instanceof Error ? err.message : 'Unknown error');
       }
     }
 
@@ -248,8 +250,7 @@ router.post('/join', async (req: AuthRequest, res: Response) => {
     if (authHeader?.startsWith('Bearer ')) {
       try {
         const token = authHeader.split(' ')[1];
-        const jwt = await import('jsonwebtoken');
-        const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production') as { userId: string };
+        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
         userId = decoded.userId;
       } catch {
         // Invalid token, continue as guest
