@@ -40,6 +40,13 @@ export function RevealPage() {
     }
   }, [sessionId, fetchSession, fetchResults]);
 
+  // Auto-reveal all results for non-moderators
+  useEffect(() => {
+    if (!isModerator && results?.results && results.results.length > 0 && revealedCount === 0) {
+      setRevealedCount(results.results.length);
+    }
+  }, [isModerator, results, revealedCount]);
+
   if (!session) {
     return (
       <div className="flex-1 flex items-center justify-center">
