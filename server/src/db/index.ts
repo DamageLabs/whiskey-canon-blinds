@@ -120,6 +120,36 @@ export function initializeDatabase() {
 
   // Add new columns to existing tables (safe to run multiple times)
   try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN avatar_url TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN bio TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN favorite_category TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN experience_level TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
     sqlite.exec(`ALTER TABLE users ADD COLUMN is_profile_public INTEGER NOT NULL DEFAULT 1;`);
   } catch {
     // Column already exists
