@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
-import { db, schema } from '../db';
+import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
-import { AuthRequest, authenticateParticipant } from '../middleware/auth';
-import { getIO } from '../socket';
+import { AuthRequest, authenticateParticipant } from '../middleware/auth.js';
+import { getIO } from '../socket/index.js';
 
 const router = Router();
 

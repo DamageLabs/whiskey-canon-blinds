@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { db, schema } from '../db';
+import { db, schema } from '../db/index.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { AuthRequest, authenticateUser } from '../middleware/auth';
+import { AuthRequest, authenticateUser } from '../middleware/auth.js';
 
 const router = Router();
 

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
-import { db, schema } from '../db';
+import { db, schema } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 import {
   AuthRequest,
@@ -9,8 +9,8 @@ import {
   authenticateParticipant,
   authenticateAny,
   generateParticipantToken,
-} from '../middleware/auth';
-import { getIO } from '../socket';
+} from '../middleware/auth.js';
+import { getIO } from '../socket/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production';
 

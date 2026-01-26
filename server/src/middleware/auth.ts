@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import type { UserRole } from '../db/schema';
+import type { UserRole } from '../db/schema.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production';
 
