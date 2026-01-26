@@ -15,7 +15,7 @@ interface AchievementBadgeProps {
 }
 
 // Icon components for achievements
-const ICONS: Record<string, JSX.Element> = {
+const ICONS: Record<string, React.JSX.Element> = {
   glass: (
     <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
       <path d="M6 2h12l-1.5 14h-9L6 2zm6 18c-2 0-3-1-3-2h6c0 1-1 2-3 2zm-2-4h4v2h-4v-2z" />
