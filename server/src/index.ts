@@ -5,14 +5,14 @@ import { createServer } from 'http';
 import path from 'path';
 import dotenv from 'dotenv';
 
-import { initializeDatabase } from './db';
-import { initializeSocket } from './socket';
-import authRoutes from './routes/auth';
-import sessionsRoutes from './routes/sessions';
-import scoresRoutes from './routes/scores';
-import participantsRoutes from './routes/participants';
-import adminRoutes from './routes/admin';
-import socialRoutes from './routes/social';
+import { initializeDatabase } from './db/index.js';
+import { initializeSocket } from './socket/index.js';
+import authRoutes from './routes/auth.js';
+import sessionsRoutes from './routes/sessions.js';
+import scoresRoutes from './routes/scores.js';
+import participantsRoutes from './routes/participants.js';
+import adminRoutes from './routes/admin.js';
+import socialRoutes from './routes/social.js';
 
 // Load environment variables
 dotenv.config();

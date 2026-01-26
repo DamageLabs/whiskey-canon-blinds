@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { db, schema } from '../db';
+import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 import {
   AuthRequest,
@@ -13,8 +13,8 @@ import {
   authenticateUser,
   verifyToken,
   JwtPayload,
-} from '../middleware/auth';
-import { validateEmail, normalizeEmail } from '../utils/validation';
+} from '../middleware/auth.js';
+import { validateEmail, normalizeEmail } from '../utils/validation.js';
 
 const router = Router();
 

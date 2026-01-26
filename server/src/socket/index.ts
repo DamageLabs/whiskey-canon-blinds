@@ -1,7 +1,7 @@
 import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
-import { verifyToken, ParticipantJwtPayload, JwtPayload } from '../middleware/auth';
-import { db, schema } from '../db';
+import { verifyToken, ParticipantJwtPayload, JwtPayload } from '../middleware/auth.js';
+import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 
 let io: Server;
