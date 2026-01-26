@@ -38,8 +38,8 @@ const displayNameSchema = z.object({
 
 const emailSchema = z.object({
   email: z.string().refine(
-    (email) => validateEmail(email).valid,
-    (email) => ({ message: validateEmail(email).error || 'Invalid email address' })
+    (email: string) => validateEmail(email).valid,
+    { message: 'Invalid email address' }
   ),
   password: z.string().min(1, 'Password is required to change email'),
 });

@@ -7,6 +7,8 @@ let socket: Socket | null = null;
 export interface SocketEvents {
   'session:started': { sessionId: string };
   'session:advanced': { phase: string; whiskeyIndex: number };
+  'session:paused': { sessionId: string };
+  'session:resumed': { sessionId: string };
   'session:reveal': { sessionId: string; whiskeys: unknown[]; scores: unknown[] };
   'session:ended': { sessionId: string };
   'participant:joined': { id: string; displayName: string; status: string; isReady: boolean };

@@ -9,8 +9,8 @@ import { validateEmail } from '@/utils/validation';
 const registerSchema = z.object({
   displayName: z.string().min(2, 'Name must be at least 2 characters').max(30, 'Name must be 30 characters or less'),
   email: z.string().refine(
-    (email) => validateEmail(email).valid,
-    (email) => ({ message: validateEmail(email).error || 'Invalid email address' })
+    (email: string) => validateEmail(email).valid,
+    { message: 'Invalid email address' }
   ),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),

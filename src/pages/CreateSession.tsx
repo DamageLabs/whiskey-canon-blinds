@@ -66,14 +66,14 @@ export function CreateSessionPage() {
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<SessionFormData>({
+  } = useForm({
     resolver: zodResolver(sessionSchema),
     defaultValues: {
       name: '',
       hostName: '',
       theme: 'bourbon',
       whiskeys: [
-        { name: '', distillery: '', proof: 90, pourSize: '0.5oz' },
+        { name: '', distillery: '', age: undefined, proof: 90, price: undefined, pourSize: '0.5oz' as const },
       ],
     },
   });
@@ -340,7 +340,7 @@ export function CreateSessionPage() {
                       variant="ghost"
                       className="w-full border border-dashed border-zinc-700"
                       onClick={() =>
-                        append({ name: '', distillery: '', proof: 90, pourSize: '0.5oz' })
+                        append({ name: '', distillery: '', age: undefined, proof: 90, price: undefined, pourSize: '0.5oz' as const })
                       }
                     >
                       + Add Another Whiskey
