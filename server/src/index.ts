@@ -32,7 +32,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Serve uploaded files
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'dist', 'uploads')));
 
 // Health check
 app.get('/api/health', (req, res) => {

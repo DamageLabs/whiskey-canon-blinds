@@ -21,7 +21,7 @@ const router = Router();
 // Configure multer for avatar uploads
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
+    const uploadDir = path.join(process.cwd(), 'dist', 'uploads', 'avatars');
     // Ensure directory exists
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
