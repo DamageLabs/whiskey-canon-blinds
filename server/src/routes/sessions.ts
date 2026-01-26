@@ -260,7 +260,7 @@ router.post('/join', async (req: AuthRequest, res: Response) => {
     const isModerator = userId && session.moderatorId === userId;
 
     // Check if moderator already has a participant record
-    if (isModerator) {
+    if (isModerator && userId) {
       const existingParticipant = await db.query.participants.findFirst({
         where: and(
           eq(schema.participants.sessionId, session.id),
