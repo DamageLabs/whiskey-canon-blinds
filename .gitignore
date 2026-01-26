@@ -9,6 +9,11 @@ lerna-debug.log*
 
 node_modules
 dist
+!dist/uploads/
+!dist/uploads/avatars/
+!dist/uploads/avatars/.gitkeep
+dist/uploads/avatars/*
+!dist/uploads/avatars/.gitkeep
 dist-ssr
 *.local
 
