@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db, schema } from '../db/index.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { AuthRequest, authenticateUser } from '../middleware/auth.js';
+import { AuthRequest, authenticateUser, getJwtSecret } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -226,7 +226,7 @@ router.get('/profile/:userId', async (req: AuthRequest, res: Response) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.default.verify(
           token,
-          process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production'
+          getJwtSecret()
         ) as { userId: string };
         currentUserId = decoded.userId;
       } catch {

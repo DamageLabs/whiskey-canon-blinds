@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { randomInt } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { db, schema } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
@@ -9,19 +10,19 @@ import {
   authenticateParticipant,
   authenticateAny,
   generateParticipantToken,
+  getJwtSecret,
 } from '../middleware/auth.js';
+import { sessionJoinLimiter } from '../middleware/rateLimit.js';
 import { getIO } from '../socket/index.js';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production';
 
 const router = Router();
 
-// Generate a 6-character invite code
+// Generate a 6-character invite code using cryptographic RNG
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomInt(0, chars.length));
   }
   return code;
 }
@@ -157,7 +158,7 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
     if (authHeader?.startsWith('Bearer ')) {
       try {
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+        const decoded = jwt.verify(token, getJwtSecret()) as { userId: string };
         if (decoded.userId === session.moderatorId) {
           isModerator = true;
         }
@@ -170,7 +171,7 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
     const participantToken = req.headers['x-participant-token'] as string;
     if (participantToken) {
       try {
-        const decoded = jwt.verify(participantToken, JWT_SECRET) as { participantId: string; sessionId: string };
+        const decoded = jwt.verify(participantToken, getJwtSecret()) as { participantId: string; sessionId: string };
         currentParticipantId = decoded.participantId;
 
         // Check if this participant is the moderator
@@ -221,7 +222,7 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
 });
 
 // Join session by invite code
-router.post('/join', async (req: AuthRequest, res: Response) => {
+router.post('/join', sessionJoinLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { inviteCode, displayName } = req.body;
 
@@ -250,7 +251,7 @@ router.post('/join', async (req: AuthRequest, res: Response) => {
     if (authHeader?.startsWith('Bearer ')) {
       try {
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+        const decoded = jwt.verify(token, getJwtSecret()) as { userId: string };
         userId = decoded.userId;
       } catch {
         // Invalid token, continue as guest
