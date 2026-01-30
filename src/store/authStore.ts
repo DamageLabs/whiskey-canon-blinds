@@ -57,8 +57,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: null });
           try {
             const response = await authApi.login({ email, password });
-            // Store access token for API requests
-            localStorage.setItem('accessToken', response.accessToken);
+            // Tokens are stored in httpOnly cookies by the backend
             const user = { ...response.user, role: response.user.role || 'user' } as User;
             set({
               user,
@@ -79,8 +78,7 @@ export const useAuthStore = create<AuthState>()(
           try {
             await authApi.logout();
           } finally {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('participantToken');
+            // Cookies are cleared by the backend
             set({
               user: null,
               isAuthenticated: false,
@@ -111,10 +109,10 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
             });
           } catch {
-            // Try to refresh token
+            // Try to refresh token (uses httpOnly cookie)
             try {
-              const refreshResponse = await authApi.refresh();
-              localStorage.setItem('accessToken', refreshResponse.accessToken);
+              await authApi.refresh();
+              // Token refreshed via cookie, try /me again
               const user = await authApi.me();
               const role = (user.role as UserRole) || 'user';
               set({
@@ -134,7 +132,7 @@ export const useAuthStore = create<AuthState>()(
                 isLoading: false,
               });
             } catch {
-              localStorage.removeItem('accessToken');
+              // Not authenticated
               set({
                 user: null,
                 isAuthenticated: false,
@@ -158,14 +156,8 @@ export const useAuthStore = create<AuthState>()(
       {
         name: 'auth-storage',
         partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated, isAdmin: state.isAdmin }),
-        onRehydrateStorage: () => (state) => {
-          // If persisted state says authenticated but no token exists, reset auth
-          if (state?.isAuthenticated && !localStorage.getItem('accessToken')) {
-            state.user = null;
-            state.isAuthenticated = false;
-            state.isAdmin = false;
-          }
-        },
+        // Note: Authentication is now handled via httpOnly cookies
+        // The checkAuth() method should be called on app init to verify session validity
       }
     ),
     { name: 'auth-store' }

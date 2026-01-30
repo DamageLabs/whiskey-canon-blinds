@@ -16,13 +16,16 @@ class ApiError extends Error {
 
 // CSRF token management
 let csrfToken: string | null = null;
-let csrfTokenPromise: Promise<string> | null = null;
+let csrfTokenPromise: Promise<string | null> | null = null;
 
 async function fetchCsrfToken(): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/csrf-token`, {
     credentials: 'include',
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('401: Authentication required for CSRF token');
+    }
     throw new Error('Failed to fetch CSRF token');
   }
   const data = await response.json();
@@ -30,12 +33,7 @@ async function fetchCsrfToken(): Promise<string> {
 }
 
 async function getCsrfToken(): Promise<string | null> {
-  // CSRF tokens require authentication - check if user is logged in
-  const accessToken = localStorage.getItem('accessToken');
-  if (!accessToken) {
-    return null;
-  }
-
+  // Return cached token if available
   if (csrfToken) {
     return csrfToken;
   }
@@ -48,6 +46,11 @@ async function getCsrfToken(): Promise<string | null> {
       return token;
     }).catch(err => {
       csrfTokenPromise = null;
+      // Return null instead of throwing - caller will proceed without CSRF token
+      // This handles the case where user is not authenticated
+      if (err?.message?.includes('401') || err?.message?.includes('Authentication')) {
+        return null;
+      }
       throw err;
     });
   }
@@ -82,37 +85,25 @@ function isCsrfExempt(endpoint: string): boolean {
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { skipAuth, skipCsrf, ...fetchOptions } = options;
+  const { skipAuth: _skipAuth, skipCsrf, ...fetchOptions } = options;
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...fetchOptions.headers,
   };
 
-  if (!skipAuth) {
-    // Add access token if available (for user auth)
-    const accessToken = localStorage.getItem('accessToken');
-    if (accessToken) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
-    }
-
-    // Add participant token if available
-    const participantToken = localStorage.getItem('participantToken');
-    if (participantToken) {
-      (headers as Record<string, string>)['x-participant-token'] = participantToken;
-    }
-  }
+  // Authentication is handled via httpOnly cookies (set by backend)
+  // Cookies are automatically sent with credentials: 'include'
 
   // Add CSRF token for state-changing requests (unless exempt)
-  // CSRF tokens require authentication, so only fetch if user is logged in
   if (!skipCsrf && isStateChangingMethod(fetchOptions.method) && !isCsrfExempt(endpoint)) {
     try {
       const token = await getCsrfToken();
       if (token) {
         (headers as Record<string, string>)['x-csrf-token'] = token;
       }
-    } catch (err) {
-      console.warn('Failed to get CSRF token:', err);
+    } catch {
+      // CSRF token fetch failed (likely not authenticated), continue without it
     }
   }
 
@@ -571,11 +562,8 @@ export interface AchievementsResponse {
 export const dataExportApi = {
   // Download personal data export (GDPR)
   downloadAllData: async () => {
-    const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_BASE_URL}/auth/me/export`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: 'include', // Send httpOnly cookies for authentication
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Download failed' }));
@@ -594,11 +582,8 @@ export const dataExportApi = {
 
   // Download tasting history as CSV
   downloadTastingsCSV: async () => {
-    const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_BASE_URL}/auth/me/export/tastings?format=csv`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: 'include', // Send httpOnly cookies for authentication
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Download failed' }));
@@ -617,11 +602,8 @@ export const dataExportApi = {
 
   // Download tasting history as PDF (generates printable HTML)
   downloadTastingsPDF: async () => {
-    const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_BASE_URL}/auth/me/export/tastings?format=json`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      credentials: 'include', // Send httpOnly cookies for authentication
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Download failed' }));

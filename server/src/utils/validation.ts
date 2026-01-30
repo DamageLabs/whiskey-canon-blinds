@@ -1,4 +1,38 @@
 /**
+ * Input length limits to prevent oversized payloads
+ */
+export const INPUT_LIMITS = {
+  EMAIL: 254, // RFC 5321 max email length
+  PASSWORD: 128, // Reasonable max to prevent bcrypt DoS
+  DISPLAY_NAME: 100,
+  BIO: 500,
+  VERIFICATION_CODE: 8,
+  SESSION_NAME: 100,
+  SESSION_THEME: 50,
+  WHISKEY_NAME: 200,
+  WHISKEY_DISTILLERY: 200,
+  NOTES: 2000,
+  INVITE_CODE: 20,
+} as const;
+
+/**
+ * Validates string length is within limits
+ */
+export function validateLength(
+  value: string | undefined | null,
+  maxLength: number,
+  fieldName: string
+): { valid: boolean; error?: string } {
+  if (!value) {
+    return { valid: true }; // Let other validation handle required fields
+  }
+  if (value.length > maxLength) {
+    return { valid: false, error: `${fieldName} must be ${maxLength} characters or less` };
+  }
+  return { valid: true };
+}
+
+/**
  * Validates an email address format and structure
  */
 export function validateEmail(email: string): { valid: boolean; error?: string } {

@@ -44,16 +44,17 @@ export function AdminPage() {
     setLoading(true);
     setError(null);
 
-    const token = localStorage.getItem('accessToken');
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+    const fetchOptions = {
+      credentials: 'include' as RequestCredentials, // Send httpOnly cookies for authentication
+      headers: {
+        'Content-Type': 'application/json',
+      },
     };
 
     try {
       const [usersRes, sessionsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/admin/users`, { headers }),
-        fetch(`${API_BASE_URL}/admin/sessions`, { headers }),
+        fetch(`${API_BASE_URL}/admin/users`, fetchOptions),
+        fetch(`${API_BASE_URL}/admin/sessions`, fetchOptions),
       ]);
 
       if (!usersRes.ok || !sessionsRes.ok) {
@@ -75,14 +76,12 @@ export function AdminPage() {
   };
 
   const updateUserRole = async (userId: string, newRole: 'user' | 'admin') => {
-    const token = localStorage.getItem('accessToken');
-
     try {
       const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/role`, {
         method: 'PATCH',
+        credentials: 'include', // Send httpOnly cookies for authentication
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ role: newRole }),
       });
@@ -101,14 +100,10 @@ export function AdminPage() {
   const deleteUser = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
 
-    const token = localStorage.getItem('accessToken');
-
     try {
       const res = await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include', // Send httpOnly cookies for authentication
       });
 
       if (!res.ok) {
@@ -125,14 +120,10 @@ export function AdminPage() {
   const deleteSession = async (sessionId: string) => {
     if (!confirm('Are you sure you want to delete this session?')) return;
 
-    const token = localStorage.getItem('accessToken');
-
     try {
       const res = await fetch(`${API_BASE_URL}/admin/sessions/${sessionId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include', // Send httpOnly cookies for authentication
       });
 
       if (!res.ok) {

@@ -5,6 +5,8 @@ import { eq, and } from 'drizzle-orm';
 import { AuthRequest, authenticateParticipant, authenticateUser } from '../middleware/auth.js';
 import { resultsLimiter } from '../middleware/rateLimit.js';
 import { getIO } from '../socket/index.js';
+import { validateLength, INPUT_LIMITS } from '../utils/validation.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -44,6 +46,23 @@ router.post('/', authenticateParticipant, async (req: AuthRequest, res: Response
     for (const [key, value] of Object.entries(scoreFields)) {
       if (typeof value !== 'number' || value < 1 || value > 10) {
         return res.status(400).json({ error: `${key} must be a number between 1 and 10` });
+      }
+    }
+
+    // Validate notes length
+    const notesFields = [
+      { value: noseNotes, name: 'Nose notes' },
+      { value: palateNotes, name: 'Palate notes' },
+      { value: finishNotes, name: 'Finish notes' },
+      { value: generalNotes, name: 'General notes' },
+      { value: identityGuess, name: 'Identity guess' },
+    ];
+    for (const field of notesFields) {
+      if (field.value) {
+        const lengthCheck = validateLength(field.value, INPUT_LIMITS.NOTES, field.name);
+        if (!lengthCheck.valid) {
+          return res.status(400).json({ error: lengthCheck.error });
+        }
       }
     }
 
@@ -121,7 +140,7 @@ router.post('/', authenticateParticipant, async (req: AuthRequest, res: Response
       lockedAt: now,
     });
   } catch (error) {
-    console.error('Submit score error:', error);
+    logger.error('Submit score error:', error);
     return res.status(500).json({ error: 'Failed to submit score' });
   }
 });
@@ -214,7 +233,7 @@ router.get('/session/:sessionId', resultsLimiter, async (req: AuthRequest, res: 
       participantCount: participantsData.length,
     });
   } catch (error) {
-    console.error('Get scores error:', error);
+    logger.error('Get scores error:', error);
     return res.status(500).json({ error: 'Failed to get scores' });
   }
 });
@@ -233,7 +252,7 @@ router.get('/my-scores/:sessionId', authenticateParticipant, async (req: AuthReq
 
     return res.json(myScores);
   } catch (error) {
-    console.error('Get my scores error:', error);
+    logger.error('Get my scores error:', error);
     return res.status(500).json({ error: 'Failed to get scores' });
   }
 });
@@ -283,7 +302,7 @@ router.patch('/:scoreId/visibility', authenticateUser, async (req: AuthRequest, 
 
     return res.json({ id: scoreId, isPublic });
   } catch (error) {
-    console.error('Toggle score visibility error:', error);
+    logger.error('Toggle score visibility error:', error);
     return res.status(500).json({ error: 'Failed to update score visibility' });
   }
 });
@@ -340,7 +359,7 @@ router.get('/shareable', authenticateUser, async (req: AuthRequest, res: Respons
       lockedAt: s.score.lockedAt,
     })));
   } catch (error) {
-    console.error('Get shareable scores error:', error);
+    logger.error('Get shareable scores error:', error);
     return res.status(500).json({ error: 'Failed to get shareable scores' });
   }
 });

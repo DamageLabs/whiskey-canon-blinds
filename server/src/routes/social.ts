@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { AuthRequest, authenticateUser, getJwtSecret } from '../middleware/auth.js';
 import { statsLimiter } from '../middleware/rateLimit.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ router.post('/follow/:userId', authenticateUser, async (req: AuthRequest, res: R
 
     return res.status(201).json({ message: 'Successfully followed user' });
   } catch (error) {
-    console.error('Follow user error:', error);
+    logger.error('Follow user error:', error);
     return res.status(500).json({ error: 'Failed to follow user' });
   }
 });
@@ -82,7 +83,7 @@ router.delete('/follow/:userId', authenticateUser, async (req: AuthRequest, res:
 
     return res.json({ message: 'Successfully unfollowed user' });
   } catch (error) {
-    console.error('Unfollow user error:', error);
+    logger.error('Unfollow user error:', error);
     return res.status(500).json({ error: 'Failed to unfollow user' });
   }
 });
@@ -145,7 +146,7 @@ router.get('/followers/:userId', async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Get followers error:', error);
+    logger.error('Get followers error:', error);
     return res.status(500).json({ error: 'Failed to get followers' });
   }
 });
@@ -208,7 +209,7 @@ router.get('/following/:userId', async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Get following error:', error);
+    logger.error('Get following error:', error);
     return res.status(500).json({ error: 'Failed to get following' });
   }
 });
@@ -310,7 +311,7 @@ router.get('/profile/:userId', async (req: AuthRequest, res: Response) => {
 
     return res.json(profile);
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error:', error);
     return res.status(500).json({ error: 'Failed to get profile' });
   }
 });
@@ -332,7 +333,7 @@ router.patch('/profile/privacy', authenticateUser, async (req: AuthRequest, res:
 
     return res.json({ isProfilePublic: isPublic });
   } catch (error) {
-    console.error('Toggle privacy error:', error);
+    logger.error('Toggle privacy error:', error);
     return res.status(500).json({ error: 'Failed to update privacy setting' });
   }
 });
@@ -423,7 +424,7 @@ router.get('/profile/:userId/notes', async (req: AuthRequest, res: Response) => 
       },
     });
   } catch (error) {
-    console.error('Get public notes error:', error);
+    logger.error('Get public notes error:', error);
     return res.status(500).json({ error: 'Failed to get public notes' });
   }
 });
@@ -443,7 +444,7 @@ router.get('/is-following/:userId', authenticateUser, async (req: AuthRequest, r
 
     return res.json({ isFollowing: !!follow });
   } catch (error) {
-    console.error('Check following error:', error);
+    logger.error('Check following error:', error);
     return res.status(500).json({ error: 'Failed to check following status' });
   }
 });
@@ -618,7 +619,7 @@ router.get('/profile/:userId/stats', statsLimiter, async (req: AuthRequest, res:
       recentActivity: recentSessions,
     });
   } catch (error) {
-    console.error('Get tasting stats error:', error);
+    logger.error('Get tasting stats error:', error);
     return res.status(500).json({ error: 'Failed to get tasting statistics' });
   }
 });
@@ -826,7 +827,7 @@ router.get('/profile/:userId/achievements', async (req: AuthRequest, res: Respon
       },
     });
   } catch (error) {
-    console.error('Get achievements error:', error);
+    logger.error('Get achievements error:', error);
     return res.status(500).json({ error: 'Failed to get achievements' });
   }
 });

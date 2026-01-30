@@ -14,6 +14,8 @@ import {
 } from '../middleware/auth.js';
 import { sessionJoinLimiter } from '../middleware/rateLimit.js';
 import { getIO } from '../socket/index.js';
+import { validateLength, INPUT_LIMITS } from '../utils/validation.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -40,12 +42,51 @@ router.post('/', authenticateUser, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Host name is required' });
     }
 
+    // Validate input lengths
+    const nameLengthCheck = validateLength(name, INPUT_LIMITS.SESSION_NAME, 'Session name');
+    if (!nameLengthCheck.valid) {
+      return res.status(400).json({ error: nameLengthCheck.error });
+    }
+
+    const hostNameLengthCheck = validateLength(hostName, INPUT_LIMITS.DISPLAY_NAME, 'Host name');
+    if (!hostNameLengthCheck.valid) {
+      return res.status(400).json({ error: hostNameLengthCheck.error });
+    }
+
+    const themeLengthCheck = validateLength(theme, INPUT_LIMITS.SESSION_THEME, 'Theme');
+    if (!themeLengthCheck.valid) {
+      return res.status(400).json({ error: themeLengthCheck.error });
+    }
+
+    if (customTheme) {
+      const customThemeLengthCheck = validateLength(customTheme, INPUT_LIMITS.SESSION_THEME, 'Custom theme');
+      if (!customThemeLengthCheck.valid) {
+        return res.status(400).json({ error: customThemeLengthCheck.error });
+      }
+    }
+
     if (!whiskeys || !Array.isArray(whiskeys) || whiskeys.length === 0) {
       return res.status(400).json({ error: 'At least one whiskey is required' });
     }
 
     if (whiskeys.length > 6) {
       return res.status(400).json({ error: 'Maximum 6 whiskeys allowed' });
+    }
+
+    // Validate whiskey field lengths
+    for (const w of whiskeys) {
+      if (w.name) {
+        const whiskeyNameCheck = validateLength(w.name, INPUT_LIMITS.WHISKEY_NAME, 'Whiskey name');
+        if (!whiskeyNameCheck.valid) {
+          return res.status(400).json({ error: whiskeyNameCheck.error });
+        }
+      }
+      if (w.distillery) {
+        const distilleryCheck = validateLength(w.distillery, INPUT_LIMITS.WHISKEY_DISTILLERY, 'Distillery');
+        if (!distilleryCheck.valid) {
+          return res.status(400).json({ error: distilleryCheck.error });
+        }
+      }
     }
 
     const sessionId = uuidv4();
@@ -123,7 +164,7 @@ router.post('/', authenticateUser, async (req: AuthRequest, res: Response) => {
       participantToken,
     });
   } catch (error) {
-    console.error('Create session error:', error);
+    logger.error('Create session error:', error);
     return res.status(500).json({ error: 'Failed to create session' });
   }
 });
@@ -163,7 +204,7 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
           isModerator = true;
         }
       } catch (err) {
-        console.log('Access token verification failed:', err instanceof Error ? err.message : 'Unknown error');
+        logger.debug('Access token verification failed:', err instanceof Error ? err.message : 'Unknown error');
       }
     }
 
@@ -183,7 +224,7 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
           isModerator = true;
         }
       } catch (err) {
-        console.log('Participant token verification failed:', err instanceof Error ? err.message : 'Unknown error');
+        logger.debug('Participant token verification failed:', err instanceof Error ? err.message : 'Unknown error');
       }
     }
 
@@ -216,7 +257,7 @@ router.get('/:sessionId', async (req: AuthRequest, res: Response) => {
       })),
     });
   } catch (error) {
-    console.error('Get session error:', error);
+    logger.error('Get session error:', error);
     return res.status(500).json({ error: 'Failed to get session' });
   }
 });
@@ -228,6 +269,17 @@ router.post('/join', sessionJoinLimiter, async (req: AuthRequest, res: Response)
 
     if (!inviteCode || !displayName) {
       return res.status(400).json({ error: 'Invite code and display name are required' });
+    }
+
+    // Validate input lengths
+    const inviteCodeLengthCheck = validateLength(inviteCode, INPUT_LIMITS.INVITE_CODE, 'Invite code');
+    if (!inviteCodeLengthCheck.valid) {
+      return res.status(400).json({ error: inviteCodeLengthCheck.error });
+    }
+
+    const displayNameLengthCheck = validateLength(displayName, INPUT_LIMITS.DISPLAY_NAME, 'Display name');
+    if (!displayNameLengthCheck.valid) {
+      return res.status(400).json({ error: displayNameLengthCheck.error });
     }
 
     const code = inviteCode.replace(/[^A-Z0-9]/gi, '').toUpperCase();
@@ -359,7 +411,7 @@ router.post('/join', sessionJoinLimiter, async (req: AuthRequest, res: Response)
       },
     });
   } catch (error) {
-    console.error('Join session error:', error);
+    logger.error('Join session error:', error);
     return res.status(500).json({ error: 'Failed to join session' });
   }
 });
@@ -409,7 +461,7 @@ router.post('/:sessionId/start', authenticateAny, async (req: AuthRequest, res: 
 
     return res.json({ message: 'Session started' });
   } catch (error) {
-    console.error('Start session error:', error);
+    logger.error('Start session error:', error);
     return res.status(500).json({ error: 'Failed to start session' });
   }
 });
@@ -466,7 +518,7 @@ router.post('/:sessionId/advance', authenticateAny, async (req: AuthRequest, res
       whiskeyIndex: whiskeyIndex ?? session.currentWhiskeyIndex,
     });
   } catch (error) {
-    console.error('Advance session error:', error);
+    logger.error('Advance session error:', error);
     return res.status(500).json({ error: 'Failed to advance session' });
   }
 });
@@ -530,7 +582,7 @@ router.post('/:sessionId/reveal', authenticateAny, async (req: AuthRequest, res:
       scores: sessionScores,
     });
   } catch (error) {
-    console.error('Reveal session error:', error);
+    logger.error('Reveal session error:', error);
     return res.status(500).json({ error: 'Failed to reveal session' });
   }
 });
@@ -580,7 +632,7 @@ router.post('/:sessionId/pause', authenticateAny, async (req: AuthRequest, res: 
 
     return res.json({ message: 'Session paused' });
   } catch (error) {
-    console.error('Pause session error:', error);
+    logger.error('Pause session error:', error);
     return res.status(500).json({ error: 'Failed to pause session' });
   }
 });
@@ -630,7 +682,7 @@ router.post('/:sessionId/resume', authenticateAny, async (req: AuthRequest, res:
 
     return res.json({ message: 'Session resumed' });
   } catch (error) {
-    console.error('Resume session error:', error);
+    logger.error('Resume session error:', error);
     return res.status(500).json({ error: 'Failed to resume session' });
   }
 });
@@ -676,7 +728,7 @@ router.post('/:sessionId/end', authenticateAny, async (req: AuthRequest, res: Re
 
     return res.json({ message: 'Session ended' });
   } catch (error) {
-    console.error('End session error:', error);
+    logger.error('End session error:', error);
     return res.status(500).json({ error: 'Failed to end session' });
   }
 });
@@ -690,7 +742,7 @@ router.get('/', authenticateUser, async (req: AuthRequest, res: Response) => {
 
     return res.json(userSessions);
   } catch (error) {
-    console.error('Get sessions error:', error);
+    logger.error('Get sessions error:', error);
     return res.status(500).json({ error: 'Failed to get sessions' });
   }
 });

@@ -3,6 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { verifyToken, ParticipantJwtPayload, JwtPayload } from '../middleware/auth.js';
 import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
+import { logger } from '../utils/logger.js';
 
 let io: Server;
 
@@ -51,12 +52,12 @@ export function initializeSocket(httpServer: HttpServer): Server {
   });
 
   io.on('connection', async (socket: AuthenticatedSocket) => {
-    console.log(`Client connected: ${socket.id}`);
+    logger.debug(`Client connected: ${socket.id}`);
 
     // Join session room
     if (socket.sessionId) {
       socket.join(socket.sessionId);
-      console.log(`Socket ${socket.id} joined session ${socket.sessionId}`);
+      logger.debug(`Socket ${socket.id} joined session ${socket.sessionId}`);
 
       // Notify others
       socket.to(socket.sessionId).emit('participant:connected', {
@@ -75,7 +76,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
         if (session && session.moderatorId === socket.userId) {
           socket.join(sessionId);
           socket.sessionId = sessionId;
-          console.log(`Moderator ${socket.userId} joined session ${sessionId}`);
+          logger.debug(`Moderator ${socket.userId} joined session ${sessionId}`);
         }
       }
     });
@@ -149,7 +150,7 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
     // Handle disconnection
     socket.on('disconnect', () => {
-      console.log(`Client disconnected: ${socket.id}`);
+      logger.debug(`Client disconnected: ${socket.id}`);
 
       if (socket.sessionId && socket.participantId) {
         socket.to(socket.sessionId).emit('participant:disconnected', {
