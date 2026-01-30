@@ -24,6 +24,8 @@ export const users = sqliteTable('users', {
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false), // Email verification status
   verificationCode: text('verification_code'), // 6-digit verification code
   verificationCodeExpiresAt: integer('verification_code_expires_at', { mode: 'timestamp' }), // Code expiration
+  resetPasswordCode: text('reset_password_code'), // 6-digit password reset code
+  resetPasswordCodeExpiresAt: integer('reset_password_code_expires_at', { mode: 'timestamp' }), // Reset code expiration
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
