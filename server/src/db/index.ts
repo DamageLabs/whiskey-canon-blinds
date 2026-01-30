@@ -180,6 +180,19 @@ export function initializeDatabase() {
     // Column already exists
   }
 
+  // Password reset columns
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN reset_password_code TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN reset_password_code_expires_at INTEGER;`);
+  } catch {
+    // Column already exists
+  }
+
   console.log('Database initialized');
 }
 

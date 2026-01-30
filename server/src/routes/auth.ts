@@ -19,6 +19,7 @@ import {
   generateVerificationCode,
   getCodeExpiration,
   sendVerificationEmail,
+  sendPasswordResetEmail,
 } from '../services/email.js';
 
 const router = Router();
@@ -288,6 +289,110 @@ router.post('/resend-verification', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Resend verification error:', error);
     return res.status(500).json({ error: 'Failed to resend verification' });
+  }
+});
+
+// Request password reset
+router.post('/forgot-password', async (req: AuthRequest, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    // Find user
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.email, normalizedEmail),
+    });
+
+    // Always return success message to prevent email enumeration
+    if (!user) {
+      return res.json({ message: 'If that email exists, a password reset code has been sent.' });
+    }
+
+    // Generate reset code
+    const resetCode = generateVerificationCode();
+    const resetCodeExpiresAt = getCodeExpiration();
+
+    await db.update(schema.users)
+      .set({
+        resetPasswordCode: resetCode,
+        resetPasswordCodeExpiresAt: resetCodeExpiresAt,
+      })
+      .where(eq(schema.users.id, user.id));
+
+    // Send email
+    const emailResult = await sendPasswordResetEmail(normalizedEmail, resetCode, user.displayName);
+    if (!emailResult.success) {
+      return res.status(500).json({ error: 'Failed to send password reset email' });
+    }
+
+    return res.json({
+      message: 'If that email exists, a password reset code has been sent.',
+      ...(emailResult.devCode && { devCode: emailResult.devCode }),
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    return res.status(500).json({ error: 'Failed to process password reset request' });
+  }
+});
+
+// Reset password with code
+router.post('/reset-password', async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ error: 'Email, code, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    // Find user
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.email, normalizedEmail),
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid reset code' });
+    }
+
+    // Check code
+    if (user.resetPasswordCode !== code) {
+      return res.status(400).json({ error: 'Invalid reset code' });
+    }
+
+    // Check expiration
+    if (!user.resetPasswordCodeExpiresAt || user.resetPasswordCodeExpiresAt < new Date()) {
+      return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    // Update password and clear reset code
+    await db.update(schema.users)
+      .set({
+        passwordHash,
+        resetPasswordCode: null,
+        resetPasswordCodeExpiresAt: null,
+      })
+      .where(eq(schema.users.id, user.id));
+
+    // Invalidate all refresh tokens for security
+    await db.delete(schema.refreshTokens).where(eq(schema.refreshTokens.userId, user.id));
+
+    return res.json({ message: 'Password reset successfully. Please log in with your new password.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    return res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 

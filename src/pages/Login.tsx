@@ -80,6 +80,12 @@ export function LoginPage() {
                 {...register('password')}
               />
 
+              <div className="text-right -mt-2">
+                <Link to="/forgot-password" className="text-sm text-zinc-400 hover:text-amber-500">
+                  Forgot password?
+                </Link>
+              </div>
+
               {verificationEmail && (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <p className="text-sm text-amber-400 mb-2">Email not verified. Please verify your email to continue.</p>

@@ -79,6 +79,18 @@ export const authApi = {
       { method: 'POST', body: JSON.stringify(data) }
     ),
 
+  forgotPassword: (data: { email: string }) =>
+    request<{ message: string; devCode?: string }>(
+      '/auth/forgot-password',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  resetPassword: (data: { email: string; code: string; newPassword: string }) =>
+    request<{ message: string }>(
+      '/auth/reset-password',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
   login: (data: { email: string; password: string }) =>
     request<{ user: { id: string; email: string; displayName: string; role: UserRole }; accessToken: string }>(
       '/auth/login',
