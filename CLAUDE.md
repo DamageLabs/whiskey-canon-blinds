@@ -79,7 +79,7 @@ Avatar uploads stored in `uploads/avatars/`. Multer configured in `server/src/ro
 ## Git Commit Guidelines
 
 When committing changes:
-- Do not include any AI attribution or co-author tags in commit messages
+- Do not include any AI attribution or co-author tags in commit messages or PRs
 - Use `fusion94@gmail.com` for commit author attribution
 - Use `git add .` to stage all changes
 - Generate a comprehensive commit message covering all changes since the last commit:
@@ -89,7 +89,7 @@ When committing changes:
   - Reference any relevant context (e.g., feature additions, bug fixes, refactors)
 
 When creating Pull Requests (on branches other than main):
-- Generate a comprehensive PR description covering all changes since branching from main
+- Only include changes since the last PR (not cumulative changes since branching)
 - Use a short summary line (50 chars or less) as the PR title
 - Include detailed bullet points describing each change in the PR body
 - Group related changes together
