@@ -10,7 +10,7 @@ import { initializeDatabase } from './db/index.js';
 import { initializeSocket } from './socket/index.js';
 import { validateJwtSecret } from './middleware/auth.js';
 import { generalLimiter } from './middleware/rateLimit.js';
-import { doubleCsrfProtection, generateCsrfToken } from './middleware/csrf.js';
+import { doubleCsrfProtection, generateCsrfToken, requireAuthForCsrf } from './middleware/csrf.js';
 import authRoutes from './routes/auth.js';
 import sessionsRoutes from './routes/sessions.js';
 import scoresRoutes from './routes/scores.js';
@@ -71,8 +71,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// CSRF token endpoint - must be before CSRF protection middleware
-app.get('/api/csrf-token', (req, res) => {
+// CSRF token endpoint - requires authentication, must be before CSRF protection middleware
+app.get('/api/csrf-token', requireAuthForCsrf, (req, res) => {
   const token = generateCsrfToken(req, res);
   res.json({ csrfToken: token });
 });

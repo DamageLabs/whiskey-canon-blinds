@@ -213,6 +213,46 @@ export function initializeDatabase() {
     // Column already exists
   }
 
+  // Verification attempt tracking columns
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN verification_attempts INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN verification_locked_until INTEGER;`);
+  } catch {
+    // Column already exists
+  }
+
+  // Password reset attempt tracking columns
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN reset_password_attempts INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN reset_password_locked_until INTEGER;`);
+  } catch {
+    // Column already exists
+  }
+
+  // Soft delete column for users
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN deleted_at INTEGER;`);
+  } catch {
+    // Column already exists
+  }
+
+  // Index for faster queries filtering out deleted users
+  try {
+    sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);`);
+  } catch {
+    // Index already exists
+  }
+
   console.log('Database initialized');
 }
 

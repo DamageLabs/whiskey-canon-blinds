@@ -22,11 +22,16 @@ export const users = sqliteTable('users', {
   role: text('role').notNull().default('user'), // 'user' or 'admin'
   isProfilePublic: integer('is_profile_public', { mode: 'boolean' }).notNull().default(true), // Privacy toggle
   emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false), // Email verification status
-  verificationCode: text('verification_code'), // 6-digit verification code
+  verificationCode: text('verification_code'), // Alphanumeric verification code
   verificationCodeExpiresAt: integer('verification_code_expires_at', { mode: 'timestamp' }), // Code expiration
-  resetPasswordCode: text('reset_password_code'), // 6-digit password reset code
+  verificationAttempts: integer('verification_attempts').notNull().default(0), // Failed verification attempts
+  verificationLockedUntil: integer('verification_locked_until', { mode: 'timestamp' }), // Lockout after too many attempts
+  resetPasswordCode: text('reset_password_code'), // Alphanumeric password reset code
   resetPasswordCodeExpiresAt: integer('reset_password_code_expires_at', { mode: 'timestamp' }), // Reset code expiration
+  resetPasswordAttempts: integer('reset_password_attempts').notNull().default(0), // Failed reset attempts
+  resetPasswordLockedUntil: integer('reset_password_locked_until', { mode: 'timestamp' }), // Lockout after too many attempts
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }), // Soft delete timestamp (null = not deleted)
 });
 
 // Sessions table

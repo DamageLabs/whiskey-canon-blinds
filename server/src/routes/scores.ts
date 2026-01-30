@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db, schema } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 import { AuthRequest, authenticateParticipant, authenticateUser } from '../middleware/auth.js';
+import { resultsLimiter } from '../middleware/rateLimit.js';
 import { getIO } from '../socket/index.js';
 
 const router = Router();
@@ -125,8 +126,8 @@ router.post('/', authenticateParticipant, async (req: AuthRequest, res: Response
   }
 });
 
-// Get scores for a session (only after reveal)
-router.get('/session/:sessionId', async (req: AuthRequest, res: Response) => {
+// Get scores for a session (only after reveal) - rate limited (complex aggregation)
+router.get('/session/:sessionId', resultsLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const sessionId = req.params.sessionId as string;
 

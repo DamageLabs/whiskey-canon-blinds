@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, schema } from '../db/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { AuthRequest, authenticateUser, requireAdmin } from '../middleware/auth.js';
 import { logAuditEvent, getClientInfo } from '../services/audit.js';
 
@@ -10,10 +10,14 @@ const router = Router();
 router.use(authenticateUser);
 router.use(requireAdmin);
 
-// Get all users
+// Get all users (excludes soft-deleted users)
 router.get('/users', async (req: AuthRequest, res: Response) => {
   try {
-    const users = await db.query.users.findMany();
+    // Filter out deleted users
+    const users = await db
+      .select()
+      .from(schema.users)
+      .where(isNull(schema.users.deletedAt));
 
     return res.json(
       users.map((u) => ({
@@ -75,7 +79,7 @@ router.patch('/users/:userId/role', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Delete user
+// Delete user (soft delete - sets deletedAt timestamp)
 router.delete('/users/:userId', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.params.userId as string;
@@ -93,8 +97,30 @@ router.delete('/users/:userId', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    await db.delete(schema.users)
+    // Check if already deleted
+    if (user.deletedAt) {
+      return res.status(400).json({ error: 'User is already deleted' });
+    }
+
+    // Soft delete: set deletedAt timestamp instead of removing row
+    const deletedAt = new Date();
+    await db.update(schema.users)
+      .set({ deletedAt })
       .where(eq(schema.users.id, userId));
+
+    // Invalidate all refresh tokens for the deleted user
+    await db.delete(schema.refreshTokens)
+      .where(eq(schema.refreshTokens.userId, userId));
+
+    // Log user deletion
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'user.delete',
+      userId: req.userId,
+      targetUserId: userId,
+      ...clientInfo,
+      metadata: { userEmail: user.email, deletedAt: deletedAt.toISOString() },
+    });
 
     return res.json({ message: 'User deleted', userId });
   } catch (error) {
