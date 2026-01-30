@@ -89,7 +89,7 @@ When committing changes:
   - Reference any relevant context (e.g., feature additions, bug fixes, refactors)
 
 When creating Pull Requests (on branches other than main):
-- Generate a comprehensive PR description covering all changes since branching from main
+- Only include changes since the last PR (not cumulative changes since branching)
 - Use a short summary line (50 chars or less) as the PR title
 - Include detailed bullet points describing each change in the PR body
 - Group related changes together
