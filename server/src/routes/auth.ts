@@ -15,7 +15,7 @@ import {
   JwtPayload,
 } from '../middleware/auth.js';
 import { authLimiter, verificationLimiter, exportLimiter } from '../middleware/rateLimit.js';
-import { validateEmail, normalizeEmail, validatePassword, validateImageMagicBytes } from '../utils/validation.js';
+import { validateEmail, normalizeEmail, validatePassword, validateImageMagicBytes, validateLength, INPUT_LIMITS } from '../utils/validation.js';
 import {
   generateVerificationCode,
   getCodeExpiration,
@@ -33,6 +33,7 @@ function getBackoffDelay(attempts: number): number {
   return Math.min(Math.pow(2, attempts) * 1000, 30000);
 }
 import { logAuditEvent, getClientInfo } from '../services/audit.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -75,6 +76,22 @@ router.post('/register', authLimiter, async (req: AuthRequest, res: Response) =>
 
     if (!email || !password || !displayName) {
       return res.status(400).json({ error: 'Email, password, and display name are required' });
+    }
+
+    // Validate input lengths
+    const emailLengthCheck = validateLength(email, INPUT_LIMITS.EMAIL, 'Email');
+    if (!emailLengthCheck.valid) {
+      return res.status(400).json({ error: emailLengthCheck.error });
+    }
+
+    const passwordLengthCheck = validateLength(password, INPUT_LIMITS.PASSWORD, 'Password');
+    if (!passwordLengthCheck.valid) {
+      return res.status(400).json({ error: passwordLengthCheck.error });
+    }
+
+    const displayNameLengthCheck = validateLength(displayName, INPUT_LIMITS.DISPLAY_NAME, 'Display name');
+    if (!displayNameLengthCheck.valid) {
+      return res.status(400).json({ error: displayNameLengthCheck.error });
     }
 
     // Validate password strength
@@ -164,7 +181,7 @@ router.post('/register', authLimiter, async (req: AuthRequest, res: Response) =>
       ...(emailResult.devCode && { devCode: emailResult.devCode }),
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error:', error);
     return res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -176,6 +193,17 @@ router.post('/verify-email', verificationLimiter, async (req: AuthRequest, res: 
 
     if (!email || !code) {
       return res.status(400).json({ error: 'Email and verification code are required' });
+    }
+
+    // Validate input lengths
+    const emailLengthCheck = validateLength(email, INPUT_LIMITS.EMAIL, 'Email');
+    if (!emailLengthCheck.valid) {
+      return res.status(400).json({ error: emailLengthCheck.error });
+    }
+
+    const codeLengthCheck = validateLength(code, INPUT_LIMITS.VERIFICATION_CODE, 'Verification code');
+    if (!codeLengthCheck.valid) {
+      return res.status(400).json({ error: codeLengthCheck.error });
     }
 
     const normalizedEmail = normalizeEmail(email);
@@ -298,19 +326,19 @@ router.post('/verify-email', verificationLimiter, async (req: AuthRequest, res: 
       accessToken,
     });
   } catch (error) {
-    console.error('Verification error:', error);
+    logger.error('Verification error:', error);
     return res.status(500).json({ error: 'Verification failed' });
   }
 });
 
 // Resend verification code
 router.post('/resend-verification', verificationLimiter, async (req: AuthRequest, res: Response) => {
-  console.log('[Auth] Resend verification request:', req.body);
+  logger.debug('[Auth] Resend verification request:', req.body);
   try {
     const { email } = req.body;
 
     if (!email) {
-      console.log('[Auth] Resend verification: no email provided');
+      logger.debug('[Auth] Resend verification: no email provided');
       return res.status(400).json({ error: 'Email is required' });
     }
 
@@ -352,7 +380,7 @@ router.post('/resend-verification', verificationLimiter, async (req: AuthRequest
       ...(emailResult.devCode && { devCode: emailResult.devCode }),
     });
   } catch (error) {
-    console.error('Resend verification error:', error);
+    logger.error('Resend verification error:', error);
     return res.status(500).json({ error: 'Failed to resend verification' });
   }
 });
@@ -364,6 +392,12 @@ router.post('/forgot-password', authLimiter, async (req: AuthRequest, res: Respo
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Validate input length
+    const emailLengthCheck = validateLength(email, INPUT_LIMITS.EMAIL, 'Email');
+    if (!emailLengthCheck.valid) {
+      return res.status(400).json({ error: emailLengthCheck.error });
     }
 
     const normalizedEmail = normalizeEmail(email);
@@ -402,7 +436,7 @@ router.post('/forgot-password', authLimiter, async (req: AuthRequest, res: Respo
       ...(emailResult.devCode && { devCode: emailResult.devCode }),
     });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('Forgot password error:', error);
     return res.status(500).json({ error: 'Failed to process password reset request' });
   }
 });
@@ -414,6 +448,22 @@ router.post('/reset-password', verificationLimiter, async (req: AuthRequest, res
 
     if (!email || !code || !newPassword) {
       return res.status(400).json({ error: 'Email, code, and new password are required' });
+    }
+
+    // Validate input lengths
+    const emailLengthCheck = validateLength(email, INPUT_LIMITS.EMAIL, 'Email');
+    if (!emailLengthCheck.valid) {
+      return res.status(400).json({ error: emailLengthCheck.error });
+    }
+
+    const codeLengthCheck = validateLength(code, INPUT_LIMITS.VERIFICATION_CODE, 'Reset code');
+    if (!codeLengthCheck.valid) {
+      return res.status(400).json({ error: codeLengthCheck.error });
+    }
+
+    const passwordLengthCheck = validateLength(newPassword, INPUT_LIMITS.PASSWORD, 'Password');
+    if (!passwordLengthCheck.valid) {
+      return res.status(400).json({ error: passwordLengthCheck.error });
     }
 
     // Validate password strength
@@ -506,7 +556,7 @@ router.post('/reset-password', verificationLimiter, async (req: AuthRequest, res
 
     return res.json({ message: 'Password reset successfully. Please log in with your new password.' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('Reset password error:', error);
     return res.status(500).json({ error: 'Failed to reset password' });
   }
 });
@@ -518,6 +568,17 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Validate input lengths
+    const emailLengthCheck = validateLength(email, INPUT_LIMITS.EMAIL, 'Email');
+    if (!emailLengthCheck.valid) {
+      return res.status(400).json({ error: emailLengthCheck.error });
+    }
+
+    const passwordLengthCheck = validateLength(password, INPUT_LIMITS.PASSWORD, 'Password');
+    if (!passwordLengthCheck.valid) {
+      return res.status(400).json({ error: passwordLengthCheck.error });
     }
 
     const normalizedEmail = normalizeEmail(email);
@@ -603,7 +664,7 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
       accessToken,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     return res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -657,7 +718,7 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
 
     return res.json({ accessToken });
   } catch (error) {
-    console.error('Refresh error:', error);
+    logger.error('Refresh error:', error);
     return res.status(500).json({ error: 'Token refresh failed' });
   }
 });
@@ -694,7 +755,7 @@ router.post('/logout', async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error('Logout error:', error);
+    logger.error('Logout error:', error);
     return res.status(500).json({ error: 'Logout failed' });
   }
 });
@@ -723,7 +784,7 @@ router.get('/me', authenticateUser, async (req: AuthRequest, res: Response) => {
       createdAt: user.createdAt,
     });
   } catch (error) {
-    console.error('Get user error:', error);
+    logger.error('Get user error:', error);
     return res.status(500).json({ error: 'Failed to get user' });
   }
 });
@@ -748,7 +809,7 @@ router.patch('/me/display-name', authenticateUser, async (req: AuthRequest, res:
 
     return res.json({ message: 'Display name updated successfully', displayName: trimmedName });
   } catch (error) {
-    console.error('Update display name error:', error);
+    logger.error('Update display name error:', error);
     return res.status(500).json({ error: 'Failed to update display name' });
   }
 });
@@ -760,6 +821,17 @@ router.patch('/me/email', authenticateUser, async (req: AuthRequest, res: Respon
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and current password are required' });
+    }
+
+    // Validate input lengths
+    const emailLengthCheck = validateLength(email, INPUT_LIMITS.EMAIL, 'Email');
+    if (!emailLengthCheck.valid) {
+      return res.status(400).json({ error: emailLengthCheck.error });
+    }
+
+    const passwordLengthCheck = validateLength(password, INPUT_LIMITS.PASSWORD, 'Password');
+    if (!passwordLengthCheck.valid) {
+      return res.status(400).json({ error: passwordLengthCheck.error });
     }
 
     // Validate new email
@@ -810,7 +882,7 @@ router.patch('/me/email', authenticateUser, async (req: AuthRequest, res: Respon
 
     return res.json({ message: 'Email updated successfully', email: normalizedEmail });
   } catch (error) {
-    console.error('Update email error:', error);
+    logger.error('Update email error:', error);
     return res.status(500).json({ error: 'Failed to update email' });
   }
 });
@@ -822,6 +894,17 @@ router.patch('/me/password', authenticateUser, async (req: AuthRequest, res: Res
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    // Validate input lengths
+    const currentPasswordLengthCheck = validateLength(currentPassword, INPUT_LIMITS.PASSWORD, 'Current password');
+    if (!currentPasswordLengthCheck.valid) {
+      return res.status(400).json({ error: currentPasswordLengthCheck.error });
+    }
+
+    const newPasswordLengthCheck = validateLength(newPassword, INPUT_LIMITS.PASSWORD, 'New password');
+    if (!newPasswordLengthCheck.valid) {
+      return res.status(400).json({ error: newPasswordLengthCheck.error });
     }
 
     // Validate password strength
@@ -865,7 +948,7 @@ router.patch('/me/password', authenticateUser, async (req: AuthRequest, res: Res
 
     return res.json({ message: 'Password updated successfully' });
   } catch (error) {
-    console.error('Update password error:', error);
+    logger.error('Update password error:', error);
     return res.status(500).json({ error: 'Failed to update password' });
   }
 });
@@ -915,7 +998,7 @@ router.post('/me/avatar', authenticateUser, avatarUpload.single('avatar'), async
 
     return res.json({ message: 'Avatar uploaded successfully', avatarUrl });
   } catch (error) {
-    console.error('Avatar upload error:', error);
+    logger.error('Avatar upload error:', error);
     // Clean up uploaded file on error
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
@@ -950,7 +1033,7 @@ router.delete('/me/avatar', authenticateUser, async (req: AuthRequest, res: Resp
 
     return res.json({ message: 'Avatar deleted successfully' });
   } catch (error) {
-    console.error('Avatar delete error:', error);
+    logger.error('Avatar delete error:', error);
     return res.status(500).json({ error: 'Failed to delete avatar' });
   }
 });
@@ -1098,7 +1181,7 @@ router.get('/me/export', exportLimiter, authenticateUser, async (req: AuthReques
     res.setHeader('Content-Disposition', `attachment; filename="whiskey-canon-data-export-${new Date().toISOString().split('T')[0]}.json"`);
     return res.json(exportData);
   } catch (error) {
-    console.error('Export data error:', error);
+    logger.error('Export data error:', error);
     return res.status(500).json({ error: 'Failed to export data' });
   }
 });
@@ -1210,7 +1293,7 @@ router.get('/me/export/tastings', exportLimiter, authenticateUser, async (req: A
       return res.json({ tastings, exportDate: new Date().toISOString() });
     }
   } catch (error) {
-    console.error('Export tastings error:', error);
+    logger.error('Export tastings error:', error);
     return res.status(500).json({ error: 'Failed to export tasting history' });
   }
 });
@@ -1261,7 +1344,7 @@ router.patch('/me/profile', authenticateUser, async (req: AuthRequest, res: Resp
       ...updates,
     });
   } catch (error) {
-    console.error('Update profile error:', error);
+    logger.error('Update profile error:', error);
     return res.status(500).json({ error: 'Failed to update profile' });
   }
 });

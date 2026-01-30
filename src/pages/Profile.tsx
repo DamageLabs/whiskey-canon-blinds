@@ -128,10 +128,9 @@ export function ProfilePage() {
   }
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('accessToken');
+    // Authentication is handled via httpOnly cookies
     return {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
     };
   };
 
@@ -164,12 +163,9 @@ export function ProfilePage() {
       const formData = new FormData();
       formData.append('avatar', file);
 
-      const token = localStorage.getItem('accessToken');
       const res = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include', // Send httpOnly cookies for authentication
         body: formData,
       });
 
@@ -200,12 +196,9 @@ export function ProfilePage() {
     setSuccessMessage(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
       const res = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include', // Send httpOnly cookies for authentication
       });
 
       const result = await res.json();
@@ -231,6 +224,7 @@ export function ProfilePage() {
     try {
       const res = await fetch(`${API_BASE_URL}/auth/me/display-name`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: getAuthHeaders(),
         body: JSON.stringify({ displayName: data.displayName }),
       });
@@ -259,6 +253,7 @@ export function ProfilePage() {
     try {
       const res = await fetch(`${API_BASE_URL}/auth/me/email`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: getAuthHeaders(),
         body: JSON.stringify({ email: data.email, password: data.password }),
       });
@@ -288,6 +283,7 @@ export function ProfilePage() {
     try {
       const res = await fetch(`${API_BASE_URL}/auth/me/password`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: getAuthHeaders(),
         body: JSON.stringify({
           currentPassword: data.currentPassword,
@@ -319,6 +315,7 @@ export function ProfilePage() {
     try {
       const res = await fetch(`${API_BASE_URL}/auth/me/profile`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: getAuthHeaders(),
         body: JSON.stringify({
           bio: data.bio || null,

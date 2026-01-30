@@ -139,9 +139,7 @@ export const useSessionStore = create<SessionState>()(
         try {
           const response = await sessionsApi.create(data);
 
-          // Store participant token (the actual JWT token, not just the ID)
-          localStorage.setItem('participantToken', response.participantToken);
-
+          // Participant token is stored in httpOnly cookie by backend
           set({
             isModerator: true,
             participantToken: response.participantToken,
@@ -160,9 +158,7 @@ export const useSessionStore = create<SessionState>()(
         try {
           const response = await sessionsApi.join({ inviteCode, displayName });
 
-          // Store participant token
-          localStorage.setItem('participantToken', response.participantToken);
-
+          // Participant token is stored in httpOnly cookie by backend
           set({
             participantToken: response.participantToken,
             currentParticipant: {
@@ -353,7 +349,7 @@ export const useSessionStore = create<SessionState>()(
       leaveSession: async () => {
         try {
           await participantsApi.leave();
-          localStorage.removeItem('participantToken');
+          // Participant token cookie is cleared by backend
           get().disconnect();
           set(initialState);
         } catch (error) {

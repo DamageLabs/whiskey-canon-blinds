@@ -3,6 +3,7 @@ import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 import { AuthRequest, authenticateParticipant } from '../middleware/auth.js';
 import { getIO } from '../socket/index.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ router.post('/ready', authenticateParticipant, async (req: AuthRequest, res: Res
 
     return res.json({ message: 'Marked as ready' });
   } catch (error) {
-    console.error('Ready error:', error);
+    logger.error('Ready error:', error);
     return res.status(500).json({ error: 'Failed to mark as ready' });
   }
 });
@@ -65,7 +66,7 @@ router.patch('/status', authenticateParticipant, async (req: AuthRequest, res: R
 
     return res.json({ message: 'Status updated' });
   } catch (error) {
-    console.error('Update status error:', error);
+    logger.error('Update status error:', error);
     return res.status(500).json({ error: 'Failed to update status' });
   }
 });
@@ -95,7 +96,7 @@ router.delete('/leave', authenticateParticipant, async (req: AuthRequest, res: R
 
     return res.json({ message: 'Left session' });
   } catch (error) {
-    console.error('Leave error:', error);
+    logger.error('Leave error:', error);
     return res.status(500).json({ error: 'Failed to leave session' });
   }
 });
@@ -113,7 +114,7 @@ router.get('/me', authenticateParticipant, async (req: AuthRequest, res: Respons
 
     return res.json(participant);
   } catch (error) {
-    console.error('Get participant error:', error);
+    logger.error('Get participant error:', error);
     return res.status(500).json({ error: 'Failed to get participant' });
   }
 });

@@ -3,6 +3,7 @@ import { db, schema } from '../db/index.js';
 import { eq, isNull } from 'drizzle-orm';
 import { AuthRequest, authenticateUser, requireAdmin } from '../middleware/auth.js';
 import { logAuditEvent, getClientInfo } from '../services/audit.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
       }))
     );
   } catch (error) {
-    console.error('Get users error:', error);
+    logger.error('Get users error:', error);
     return res.status(500).json({ error: 'Failed to get users' });
   }
 });
@@ -74,7 +75,7 @@ router.patch('/users/:userId/role', async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: 'Role updated', userId, role });
   } catch (error) {
-    console.error('Update role error:', error);
+    logger.error('Update role error:', error);
     return res.status(500).json({ error: 'Failed to update role' });
   }
 });
@@ -124,7 +125,7 @@ router.delete('/users/:userId', async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: 'User deleted', userId });
   } catch (error) {
-    console.error('Delete user error:', error);
+    logger.error('Delete user error:', error);
     return res.status(500).json({ error: 'Failed to delete user' });
   }
 });
@@ -136,7 +137,7 @@ router.get('/sessions', async (req: AuthRequest, res: Response) => {
 
     return res.json(sessions);
   } catch (error) {
-    console.error('Get sessions error:', error);
+    logger.error('Get sessions error:', error);
     return res.status(500).json({ error: 'Failed to get sessions' });
   }
 });
@@ -159,7 +160,7 @@ router.delete('/sessions/:sessionId', async (req: AuthRequest, res: Response) =>
 
     return res.json({ message: 'Session deleted', sessionId });
   } catch (error) {
-    console.error('Delete session error:', error);
+    logger.error('Delete session error:', error);
     return res.status(500).json({ error: 'Failed to delete session' });
   }
 });

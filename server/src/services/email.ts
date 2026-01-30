@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { randomBytes } from 'crypto';
+import { logger } from '../utils/logger.js';
 
 const APP_NAME = 'Whiskey Canon';
 
@@ -9,7 +10,7 @@ function getResendClient(): Resend | null {
   if (resendClient) return resendClient;
   if (process.env.RESEND_API_KEY) {
     resendClient = new Resend(process.env.RESEND_API_KEY);
-    console.log('[Email] Resend client initialized');
+    logger.info('[Email] Resend client initialized');
   }
   return resendClient;
 }
@@ -57,14 +58,14 @@ export async function sendVerificationEmail(
 
   // Without API key, log the code (dev mode)
   if (!resend) {
-    console.log('===========================================');
-    console.log(`[DEV MODE] Verification code for ${email}: ${code}`);
-    console.log('===========================================');
+    logger.dev('===========================================');
+    logger.dev(`[DEV MODE] Verification code for ${email}: ${code}`);
+    logger.dev('===========================================');
     return { success: true, devCode: code };
   }
 
   try {
-    console.log(`[Email] Sending verification email to ${email}`);
+    logger.debug(`[Email] Sending verification email to ${email}`);
     const result = await resend.emails.send({
       from: getFromEmail(),
       to: email,
@@ -91,10 +92,10 @@ export async function sendVerificationEmail(
         </div>
       `,
     });
-    console.log(`[Email] Sent successfully:`, result);
+    logger.debug(`[Email] Sent successfully:`, result);
     return { success: true };
   } catch (error) {
-    console.error('[Email] Failed to send verification email:', error);
+    logger.error('[Email] Failed to send verification email:', error);
     return { success: false, error: 'Failed to send verification email' };
   }
 }
@@ -108,14 +109,14 @@ export async function sendPasswordResetEmail(
 
   // Without API key, log the code (dev mode)
   if (!resend) {
-    console.log('===========================================');
-    console.log(`[DEV MODE] Password reset code for ${email}: ${code}`);
-    console.log('===========================================');
+    logger.dev('===========================================');
+    logger.dev(`[DEV MODE] Password reset code for ${email}: ${code}`);
+    logger.dev('===========================================');
     return { success: true, devCode: code };
   }
 
   try {
-    console.log(`[Email] Sending password reset email to ${email}`);
+    logger.debug(`[Email] Sending password reset email to ${email}`);
     const result = await resend.emails.send({
       from: getFromEmail(),
       to: email,
@@ -142,10 +143,10 @@ export async function sendPasswordResetEmail(
         </div>
       `,
     });
-    console.log(`[Email] Sent successfully:`, result);
+    logger.debug(`[Email] Sent successfully:`, result);
     return { success: true };
   } catch (error) {
-    console.error('[Email] Failed to send password reset email:', error);
+    logger.error('[Email] Failed to send password reset email:', error);
     return { success: false, error: 'Failed to send password reset email' };
   }
 }

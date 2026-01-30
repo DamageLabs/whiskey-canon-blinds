@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
 import path from 'path';
+import { logger } from '../utils/logger.js';
 
 const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'whiskey.db');
 
@@ -253,7 +254,7 @@ export function initializeDatabase() {
     // Index already exists
   }
 
-  console.log('Database initialized');
+  logger.info('Database initialized');
 }
 
 export { schema };

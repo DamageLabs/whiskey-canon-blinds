@@ -85,7 +85,7 @@ export function VerifyEmailPage() {
 
     try {
       const response = await authApi.verifyEmail({ email, code: fullCode });
-      localStorage.setItem('accessToken', response.accessToken);
+      // Access token is stored in httpOnly cookie by the backend
       setUser({
         id: response.user.id,
         email: response.user.email,
@@ -101,10 +101,8 @@ export function VerifyEmailPage() {
   };
 
   const handleResend = async () => {
-    console.log('[VerifyEmail] handleResend called, email:', email, 'cooldown:', resendCooldown);
     if (resendCooldown > 0) return;
     if (!email) {
-      console.log('[VerifyEmail] No email, skipping resend');
       return;
     }
 
@@ -113,7 +111,6 @@ export function VerifyEmailPage() {
     setNewDevCode(null);
 
     try {
-      console.log('[VerifyEmail] Calling resendVerification API');
       const response = await authApi.resendVerification({ email });
       setResendCooldown(60);
       if (response.devCode) {

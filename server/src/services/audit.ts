@@ -1,5 +1,6 @@
 import { db, schema } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../utils/logger.js';
 
 export type AuditAction =
   | 'user.login'
@@ -37,7 +38,7 @@ export async function logAuditEvent(entry: AuditLogEntry): Promise<void> {
     });
   } catch (error) {
     // Log error but don't fail the request
-    console.error('Failed to log audit event:', error);
+    logger.error('Failed to log audit event:', error);
   }
 }
 

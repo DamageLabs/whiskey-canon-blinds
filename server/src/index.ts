@@ -17,6 +17,7 @@ import scoresRoutes from './routes/scores.js';
 import participantsRoutes from './routes/participants.js';
 import adminRoutes from './routes/admin.js';
 import socialRoutes from './routes/social.js';
+import { logger } from './utils/logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -115,7 +116,7 @@ app.use('/api/social', socialRoutes);
 
 // Error handling
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Server error:', err);
+  logger.error('Server error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -125,8 +126,8 @@ const PORT = process.env.PORT || 3001;
 initializeDatabase();
 
 httpServer.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`WebSocket server ready`);
+  logger.info(`Server running on http://localhost:${PORT}`);
+  logger.info(`WebSocket server ready`);
 });
 
 export default app;
