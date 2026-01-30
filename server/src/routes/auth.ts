@@ -15,13 +15,14 @@ import {
   JwtPayload,
 } from '../middleware/auth.js';
 import { authLimiter, verificationLimiter } from '../middleware/rateLimit.js';
-import { validateEmail, normalizeEmail } from '../utils/validation.js';
+import { validateEmail, normalizeEmail, validatePassword } from '../utils/validation.js';
 import {
   generateVerificationCode,
   getCodeExpiration,
   sendVerificationEmail,
   sendPasswordResetEmail,
 } from '../services/email.js';
+import { logAuditEvent, getClientInfo } from '../services/audit.js';
 
 const router = Router();
 
@@ -64,6 +65,12 @@ router.post('/register', authLimiter, async (req: AuthRequest, res: Response) =>
 
     if (!email || !password || !displayName) {
       return res.status(400).json({ error: 'Email, password, and display name are required' });
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.errors[0] });
     }
 
     // Validate email format
@@ -224,6 +231,15 @@ router.post('/verify-email', verificationLimiter, async (req: AuthRequest, res: 
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    // Log registration completion
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'user.register',
+      userId: user.id,
+      ...clientInfo,
+      metadata: { email: normalizedEmail },
+    });
+
     return res.json({
       user: {
         id: user.id,
@@ -350,8 +366,10 @@ router.post('/reset-password', verificationLimiter, async (req: AuthRequest, res
       return res.status(400).json({ error: 'Email, code, and new password are required' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    // Validate password strength
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.errors[0] });
     }
 
     const normalizedEmail = normalizeEmail(email);
@@ -389,6 +407,14 @@ router.post('/reset-password', verificationLimiter, async (req: AuthRequest, res
 
     // Invalidate all refresh tokens for security
     await db.delete(schema.refreshTokens).where(eq(schema.refreshTokens.userId, user.id));
+
+    // Log password reset
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'user.password_reset',
+      userId: user.id,
+      ...clientInfo,
+    });
 
     return res.json({ message: 'Password reset successfully. Please log in with your new password.' });
   } catch (error) {
@@ -459,6 +485,14 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    // Log successful login
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'user.login',
+      userId: user.id,
+      ...clientInfo,
+    });
+
     return res.json({
       user: {
         id: user.id,
@@ -523,7 +557,7 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 15 * 60 * 1000,
     });
 
     return res.json({ accessToken });
@@ -537,14 +571,31 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
 router.post('/logout', async (req: AuthRequest, res: Response) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
+    let userId: string | undefined;
 
     if (refreshToken) {
+      // Get user ID before deleting token
+      const storedToken = await db.query.refreshTokens.findFirst({
+        where: eq(schema.refreshTokens.token, refreshToken),
+      });
+      userId = storedToken?.userId;
+
       await db.delete(schema.refreshTokens).where(eq(schema.refreshTokens.token, refreshToken));
     }
 
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
     res.clearCookie('participantToken');
+
+    // Log logout
+    if (userId) {
+      const clientInfo = getClientInfo(req);
+      await logAuditEvent({
+        action: 'user.logout',
+        userId,
+        ...clientInfo,
+      });
+    }
 
     return res.json({ message: 'Logged out successfully' });
   } catch (error) {
@@ -648,9 +699,19 @@ router.patch('/me/email', authenticateUser, async (req: AuthRequest, res: Respon
       return res.status(409).json({ error: 'Email is already in use' });
     }
 
+    const oldEmail = user.email;
     await db.update(schema.users)
       .set({ email: normalizedEmail })
       .where(eq(schema.users.id, req.userId!));
+
+    // Log email change
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'user.email_change',
+      userId: req.userId!,
+      ...clientInfo,
+      metadata: { oldEmail, newEmail: normalizedEmail },
+    });
 
     return res.json({ message: 'Email updated successfully', email: normalizedEmail });
   } catch (error) {
@@ -668,8 +729,10 @@ router.patch('/me/password', authenticateUser, async (req: AuthRequest, res: Res
       return res.status(400).json({ error: 'Current password and new password are required' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    // Validate password strength
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.errors[0] });
     }
 
     // Get current user
@@ -696,6 +759,14 @@ router.patch('/me/password', authenticateUser, async (req: AuthRequest, res: Res
 
     // Invalidate all refresh tokens for security
     await db.delete(schema.refreshTokens).where(eq(schema.refreshTokens.userId, req.userId!));
+
+    // Log password change
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'user.password_change',
+      userId: req.userId!,
+      ...clientInfo,
+    });
 
     return res.json({ message: 'Password updated successfully' });
   } catch (error) {
@@ -920,6 +991,15 @@ router.get('/me/export', authenticateUser, async (req: AuthRequest, res: Respons
         };
       }),
     };
+
+    // Log data export
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'data.export',
+      userId,
+      ...clientInfo,
+      metadata: { exportType: 'full' },
+    });
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="whiskey-canon-data-export-${new Date().toISOString().split('T')[0]}.json"`);

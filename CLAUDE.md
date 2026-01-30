@@ -95,6 +95,7 @@ When committing changes:
 
 When creating Pull Requests (on branches other than main):
 
+- Generate a comprehensive commit message covering all changes since the last commit:
 - Only include changes since the last PR (not cumulative changes since branching)
 - Use a short summary line (50 chars or less) as the PR title
 - Include detailed bullet points describing each change in the PR body

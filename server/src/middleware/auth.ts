@@ -107,7 +107,7 @@ export function authenticateAny(req: AuthRequest, res: Response, next: NextFunct
 
 // Generate tokens
 export function generateAccessToken(payload: JwtPayload): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '15m' });
 }
 
 export function generateRefreshToken(payload: JwtPayload): string {
@@ -115,7 +115,7 @@ export function generateRefreshToken(payload: JwtPayload): string {
 }
 
 export function generateParticipantToken(payload: ParticipantJwtPayload): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '15m' });
 }
 
 export function verifyToken(token: string): JwtPayload | ParticipantJwtPayload {

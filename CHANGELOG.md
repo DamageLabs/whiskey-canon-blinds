@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Optional field to limit session capacity (2-50 participants)
   - Backend enforcement rejects joins when session is full
 
+### Security
+- Phase 2 security improvements
+  - Reduced token expiration times (access/participant tokens: 24h → 15m, with 7-day refresh)
+  - Strengthened password requirements (12+ characters, uppercase, lowercase, number)
+  - Added CSRF protection for state-changing requests via `csrf-csrf` package
+  - Configured Helmet with explicit CSP, HSTS, frame-guard, and referrer policies
+  - Implemented audit logging for security-sensitive events:
+    - User login/logout, registration, password changes/resets
+    - Email changes, role changes, data exports
+  - New `audit_logs` database table with indexed queries
+  - Frontend automatically fetches and includes CSRF tokens on protected endpoints
+
 ## [d0dadaa] - 2026-01-24
 
 ### Added

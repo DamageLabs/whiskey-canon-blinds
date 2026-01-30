@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 import { AuthRequest, authenticateUser, requireAdmin } from '../middleware/auth.js';
+import { logAuditEvent, getClientInfo } from '../services/audit.js';
 
 const router = Router();
 
@@ -52,9 +53,20 @@ router.patch('/users/:userId/role', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const previousRole = user.role;
     await db.update(schema.users)
       .set({ role })
       .where(eq(schema.users.id, userId));
+
+    // Log role change
+    const clientInfo = getClientInfo(req);
+    await logAuditEvent({
+      action: 'user.role_change',
+      userId: req.userId,
+      targetUserId: userId,
+      ...clientInfo,
+      metadata: { previousRole, newRole: role },
+    });
 
     return res.json({ message: 'Role updated', userId, role });
   } catch (error) {
