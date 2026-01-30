@@ -71,7 +71,7 @@ export async function sendVerificationEmail(
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-            ${APP_NAME} - Blind whiskey tasting made simple
+            ${APP_NAME} - Taste responsibly. Score honestly.
           </p>
         </div>
       `,
@@ -122,7 +122,7 @@ export async function sendPasswordResetEmail(
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-            ${APP_NAME} - Blind whiskey tasting made simple
+            ${APP_NAME} - Taste responsibly. Score honestly.
           </p>
         </div>
       `,
