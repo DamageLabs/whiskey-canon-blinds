@@ -35,3 +35,32 @@ export const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Expensive endpoints - stricter limits to prevent abuse
+
+// Stats/analytics endpoints: 2 requests/min per IP (CPU-intensive aggregations)
+export const statsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 2,
+  message: { error: 'Too many stats requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Data export endpoints: 1 request/min per IP (generates large responses)
+export const exportLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 1,
+  message: { error: 'Too many export requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Session results endpoints: 5 requests/min per IP (complex scoring queries)
+export const resultsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  message: { error: 'Too many results requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

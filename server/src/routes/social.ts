@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db, schema } from '../db/index.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { AuthRequest, authenticateUser, getJwtSecret } from '../middleware/auth.js';
+import { statsLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
@@ -447,8 +448,8 @@ router.get('/is-following/:userId', authenticateUser, async (req: AuthRequest, r
   }
 });
 
-// Get tasting statistics for a user
-router.get('/profile/:userId/stats', async (req: AuthRequest, res: Response) => {
+// Get tasting statistics for a user (rate limited - expensive aggregation queries)
+router.get('/profile/:userId/stats', statsLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.params.userId as string;
 

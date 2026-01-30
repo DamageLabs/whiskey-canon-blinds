@@ -1,12 +1,18 @@
 import { doubleCsrf, DoubleCsrfConfigOptions } from 'csrf-csrf';
-import { Request } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
 const csrfOptions: DoubleCsrfConfigOptions = {
   getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET!,
   getSessionIdentifier: (req: Request) => {
-    // Use a combination of cookies/tokens as session identifier
-    // This helps ensure the CSRF token is bound to the user's session
-    return req.cookies?.refreshToken || req.cookies?.accessToken || req.ip || 'anonymous';
+    // CSRF tokens must be bound to an authenticated session
+    // Require refresh token (set on login) as the session identifier
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      // For unauthenticated requests, use a placeholder that will
+      // cause token validation to fail if they try to use CSRF-protected endpoints
+      return '__unauthenticated__';
+    }
+    return refreshToken;
   },
   cookieName: '__csrf',
   cookieOptions: {
@@ -20,4 +26,13 @@ const csrfOptions: DoubleCsrfConfigOptions = {
 
 const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf(csrfOptions);
 
-export { doubleCsrfProtection, generateCsrfToken };
+// Middleware that requires authentication before generating CSRF token
+function requireAuthForCsrf(req: Request, res: Response, next: NextFunction) {
+  const refreshToken = req.cookies?.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ error: 'Authentication required for CSRF token' });
+  }
+  next();
+}
+
+export { doubleCsrfProtection, generateCsrfToken, requireAuthForCsrf };

@@ -14,14 +14,24 @@ import {
   verifyToken,
   JwtPayload,
 } from '../middleware/auth.js';
-import { authLimiter, verificationLimiter } from '../middleware/rateLimit.js';
+import { authLimiter, verificationLimiter, exportLimiter } from '../middleware/rateLimit.js';
 import { validateEmail, normalizeEmail, validatePassword } from '../utils/validation.js';
 import {
   generateVerificationCode,
   getCodeExpiration,
+  getPasswordResetCodeExpiration,
   sendVerificationEmail,
   sendPasswordResetEmail,
 } from '../services/email.js';
+
+// Constants for attempt limiting
+const MAX_VERIFICATION_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout after max attempts
+
+// Calculate exponential backoff delay (2^attempts seconds, max 30 seconds)
+function getBackoffDelay(attempts: number): number {
+  return Math.min(Math.pow(2, attempts) * 1000, 30000);
+}
 import { logAuditEvent, getClientInfo } from '../services/audit.js';
 
 const router = Router();
@@ -159,7 +169,7 @@ router.post('/register', authLimiter, async (req: AuthRequest, res: Response) =>
   }
 });
 
-// Verify email with 6-digit code
+// Verify email with alphanumeric code
 router.post('/verify-email', verificationLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email, code } = req.body;
@@ -183,9 +193,45 @@ router.post('/verify-email', verificationLimiter, async (req: AuthRequest, res: 
       return res.status(400).json({ error: 'Email already verified' });
     }
 
-    // Check code
-    if (user.verificationCode !== code) {
-      return res.status(400).json({ error: 'Invalid verification code' });
+    // Check if account is locked due to too many attempts
+    if (user.verificationLockedUntil && user.verificationLockedUntil > new Date()) {
+      const remainingSeconds = Math.ceil((user.verificationLockedUntil.getTime() - Date.now()) / 1000);
+      return res.status(429).json({
+        error: `Too many failed attempts. Please try again in ${remainingSeconds} seconds.`,
+        lockedUntil: user.verificationLockedUntil.toISOString(),
+      });
+    }
+
+    // Check code (case-insensitive comparison)
+    const codeMatches = user.verificationCode?.toUpperCase() === code.toUpperCase();
+
+    if (!codeMatches) {
+      // Increment attempt counter
+      const newAttempts = (user.verificationAttempts || 0) + 1;
+      const updates: { verificationAttempts: number; verificationLockedUntil?: Date } = {
+        verificationAttempts: newAttempts,
+      };
+
+      // Lock account if max attempts reached
+      if (newAttempts >= MAX_VERIFICATION_ATTEMPTS) {
+        updates.verificationLockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        await db.update(schema.users)
+          .set(updates)
+          .where(eq(schema.users.id, user.id));
+        return res.status(429).json({
+          error: 'Too many failed attempts. Account locked for 15 minutes.',
+          lockedUntil: updates.verificationLockedUntil.toISOString(),
+        });
+      }
+
+      await db.update(schema.users)
+        .set(updates)
+        .where(eq(schema.users.id, user.id));
+
+      const remainingAttempts = MAX_VERIFICATION_ATTEMPTS - newAttempts;
+      return res.status(400).json({
+        error: `Invalid verification code. ${remainingAttempts} attempt${remainingAttempts !== 1 ? 's' : ''} remaining.`,
+      });
     }
 
     // Check expiration
@@ -193,12 +239,14 @@ router.post('/verify-email', verificationLimiter, async (req: AuthRequest, res: 
       return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
     }
 
-    // Mark as verified and clear code
+    // Mark as verified and clear code/attempts
     await db.update(schema.users)
       .set({
         emailVerified: true,
         verificationCode: null,
         verificationCodeExpiresAt: null,
+        verificationAttempts: 0,
+        verificationLockedUntil: null,
       })
       .where(eq(schema.users.id, user.id));
 
@@ -330,14 +378,16 @@ router.post('/forgot-password', authLimiter, async (req: AuthRequest, res: Respo
       return res.json({ message: 'If that email exists, a password reset code has been sent.' });
     }
 
-    // Generate reset code
+    // Generate reset code (with shorter expiration for security)
     const resetCode = generateVerificationCode();
-    const resetCodeExpiresAt = getCodeExpiration();
+    const resetCodeExpiresAt = getPasswordResetCodeExpiration();
 
     await db.update(schema.users)
       .set({
         resetPasswordCode: resetCode,
         resetPasswordCodeExpiresAt: resetCodeExpiresAt,
+        resetPasswordAttempts: 0,
+        resetPasswordLockedUntil: null,
       })
       .where(eq(schema.users.id, user.id));
 
@@ -383,9 +433,45 @@ router.post('/reset-password', verificationLimiter, async (req: AuthRequest, res
       return res.status(400).json({ error: 'Invalid reset code' });
     }
 
-    // Check code
-    if (user.resetPasswordCode !== code) {
-      return res.status(400).json({ error: 'Invalid reset code' });
+    // Check if account is locked due to too many attempts
+    if (user.resetPasswordLockedUntil && user.resetPasswordLockedUntil > new Date()) {
+      const remainingSeconds = Math.ceil((user.resetPasswordLockedUntil.getTime() - Date.now()) / 1000);
+      return res.status(429).json({
+        error: `Too many failed attempts. Please try again in ${remainingSeconds} seconds.`,
+        lockedUntil: user.resetPasswordLockedUntil.toISOString(),
+      });
+    }
+
+    // Check code (case-insensitive comparison)
+    const codeMatches = user.resetPasswordCode?.toUpperCase() === code.toUpperCase();
+
+    if (!codeMatches) {
+      // Increment attempt counter
+      const newAttempts = (user.resetPasswordAttempts || 0) + 1;
+      const updates: { resetPasswordAttempts: number; resetPasswordLockedUntil?: Date } = {
+        resetPasswordAttempts: newAttempts,
+      };
+
+      // Lock account if max attempts reached
+      if (newAttempts >= MAX_VERIFICATION_ATTEMPTS) {
+        updates.resetPasswordLockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        await db.update(schema.users)
+          .set(updates)
+          .where(eq(schema.users.id, user.id));
+        return res.status(429).json({
+          error: 'Too many failed attempts. Account locked for 15 minutes.',
+          lockedUntil: updates.resetPasswordLockedUntil.toISOString(),
+        });
+      }
+
+      await db.update(schema.users)
+        .set(updates)
+        .where(eq(schema.users.id, user.id));
+
+      const remainingAttempts = MAX_VERIFICATION_ATTEMPTS - newAttempts;
+      return res.status(400).json({
+        error: `Invalid reset code. ${remainingAttempts} attempt${remainingAttempts !== 1 ? 's' : ''} remaining.`,
+      });
     }
 
     // Check expiration
@@ -396,12 +482,14 @@ router.post('/reset-password', verificationLimiter, async (req: AuthRequest, res
     // Hash new password
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
-    // Update password and clear reset code
+    // Update password and clear reset code/attempts
     await db.update(schema.users)
       .set({
         passwordHash,
         resetPasswordCode: null,
         resetPasswordCodeExpiresAt: null,
+        resetPasswordAttempts: 0,
+        resetPasswordLockedUntil: null,
       })
       .where(eq(schema.users.id, user.id));
 
@@ -438,6 +526,11 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
     });
 
     if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if user account is deleted (soft delete)
+    if (user.deletedAt) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -844,8 +937,8 @@ router.delete('/me/avatar', authenticateUser, async (req: AuthRequest, res: Resp
   }
 });
 
-// Export all personal data (GDPR compliance)
-router.get('/me/export', authenticateUser, async (req: AuthRequest, res: Response) => {
+// Export all personal data (GDPR compliance) - rate limited (expensive query)
+router.get('/me/export', exportLimiter, authenticateUser, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
 
@@ -992,8 +1085,8 @@ router.get('/me/export', authenticateUser, async (req: AuthRequest, res: Respons
   }
 });
 
-// Export tasting history as CSV or JSON
-router.get('/me/export/tastings', authenticateUser, async (req: AuthRequest, res: Response) => {
+// Export tasting history as CSV or JSON - rate limited (expensive query)
+router.get('/me/export/tastings', exportLimiter, authenticateUser, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const format = (req.query.format as string) || 'csv';

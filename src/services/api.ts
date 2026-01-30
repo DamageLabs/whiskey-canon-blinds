@@ -29,7 +29,13 @@ async function fetchCsrfToken(): Promise<string> {
   return data.csrfToken;
 }
 
-async function getCsrfToken(): Promise<string> {
+async function getCsrfToken(): Promise<string | null> {
+  // CSRF tokens require authentication - check if user is logged in
+  const accessToken = localStorage.getItem('accessToken');
+  if (!accessToken) {
+    return null;
+  }
+
   if (csrfToken) {
     return csrfToken;
   }
@@ -98,10 +104,13 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   }
 
   // Add CSRF token for state-changing requests (unless exempt)
+  // CSRF tokens require authentication, so only fetch if user is logged in
   if (!skipCsrf && isStateChangingMethod(fetchOptions.method) && !isCsrfExempt(endpoint)) {
     try {
       const token = await getCsrfToken();
-      (headers as Record<string, string>)['x-csrf-token'] = token;
+      if (token) {
+        (headers as Record<string, string>)['x-csrf-token'] = token;
+      }
     } catch (err) {
       console.warn('Failed to get CSRF token:', err);
     }
@@ -118,22 +127,24 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     const errorData = await response.clone().json().catch(() => ({}));
     if (errorData.error?.toLowerCase().includes('csrf')) {
       clearCsrfToken();
-      // Retry with fresh token
+      // Retry with fresh token (only if authenticated)
       const token = await getCsrfToken();
-      (headers as Record<string, string>)['x-csrf-token'] = token;
+      if (token) {
+        (headers as Record<string, string>)['x-csrf-token'] = token;
 
-      const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...fetchOptions,
-        headers,
-        credentials: 'include',
-      });
+        const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+          ...fetchOptions,
+          headers,
+          credentials: 'include',
+        });
 
-      if (!retryResponse.ok) {
-        const error = await retryResponse.json().catch(() => ({ error: 'Request failed' }));
-        throw new ApiError(retryResponse.status, error.error || 'Request failed');
+        if (!retryResponse.ok) {
+          const error = await retryResponse.json().catch(() => ({ error: 'Request failed' }));
+          throw new ApiError(retryResponse.status, error.error || 'Request failed');
+        }
+
+        return retryResponse.json();
       }
-
-      return retryResponse.json();
     }
   }
 
