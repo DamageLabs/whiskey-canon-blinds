@@ -123,3 +123,39 @@ export function validatePassword(password: string): PasswordValidation {
 
   return { valid: errors.length === 0, errors };
 }
+
+/**
+ * Image magic byte signatures for content validation
+ */
+const IMAGE_SIGNATURES: { type: string; signature: number[] }[] = [
+  { type: 'image/jpeg', signature: [0xFF, 0xD8, 0xFF] },
+  { type: 'image/png', signature: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
+  { type: 'image/gif', signature: [0x47, 0x49, 0x46, 0x38] }, // GIF8
+  { type: 'image/webp', signature: [0x52, 0x49, 0x46, 0x46] }, // RIFF (WebP starts with RIFF)
+];
+
+/**
+ * Validates image file content by checking magic bytes
+ * Returns the detected image type or null if not a valid image
+ */
+export function validateImageMagicBytes(buffer: Buffer): string | null {
+  for (const { type, signature } of IMAGE_SIGNATURES) {
+    if (buffer.length < signature.length) continue;
+
+    const matches = signature.every((byte, index) => buffer[index] === byte);
+    if (matches) {
+      // Additional check for WebP: verify WEBP marker at offset 8
+      if (type === 'image/webp') {
+        if (buffer.length >= 12) {
+          const webpMarker = buffer.slice(8, 12).toString('ascii');
+          if (webpMarker === 'WEBP') {
+            return type;
+          }
+        }
+        continue; // Not a valid WebP, check other formats
+      }
+      return type;
+    }
+  }
+  return null;
+}
