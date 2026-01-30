@@ -45,26 +45,12 @@ export const useAuthStore = create<AuthState>()(
         isLoading: false,
         error: null,
 
-        register: async (email, password, displayName) => {
-          set({ isLoading: true, error: null });
-          try {
-            const response = await authApi.register({ email, password, displayName });
-            // Store access token for API requests
-            localStorage.setItem('accessToken', response.accessToken);
-            const user = { ...response.user, role: response.user.role || 'user' } as User;
-            set({
-              user,
-              isAuthenticated: true,
-              isAdmin: user.role === 'admin',
-              isLoading: false,
-            });
-          } catch (error) {
-            set({
-              error: (error as Error).message,
-              isLoading: false,
-            });
-            throw error;
-          }
+        // Note: register no longer authenticates - it returns verification info
+        // The actual authentication happens after email verification
+        register: async (_email, _password, _displayName) => {
+          // This method is deprecated - use authApi.register directly
+          // and navigate to /verify-email with the response
+          throw new Error('Use authApi.register directly and navigate to /verify-email');
         },
 
         login: async (email, password) => {
@@ -161,7 +147,11 @@ export const useAuthStore = create<AuthState>()(
 
         setLoading: (loading) => set({ isLoading: loading }),
 
-        setUser: (user) => set({ user }),
+        setUser: (user) => set({
+          user,
+          isAuthenticated: true,
+          isAdmin: user.role === 'admin',
+        }),
 
         clearError: () => set({ error: null }),
       }),

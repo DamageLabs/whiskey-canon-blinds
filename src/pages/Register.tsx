@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input, Card, CardContent } from '@/components/ui';
-import { useAuthStore } from '@/store/authStore';
+import { authApi } from '@/services/api';
 import { validateEmail } from '@/utils/validation';
 
 const registerSchema = z.object({
@@ -23,7 +24,8 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const { register: registerUser, isLoading, error } = useAuthStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
@@ -34,11 +36,24 @@ export function RegisterPage() {
   });
 
   const onSubmit = async (data: RegisterFormData) => {
+    setIsLoading(true);
+    setError(null);
     try {
-      await registerUser(data.email, data.password, data.displayName);
-      navigate('/');
-    } catch {
-      // Error handled in store
+      const response = await authApi.register({
+        email: data.email,
+        password: data.password,
+        displayName: data.displayName,
+      });
+      navigate('/verify-email', {
+        state: {
+          email: response.email,
+          devCode: response.devCode,
+        },
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsLoading(false);
     }
   };
 

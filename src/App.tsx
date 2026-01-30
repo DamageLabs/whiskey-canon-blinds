@@ -8,6 +8,7 @@ import {
   RevealPage,
   LoginPage,
   RegisterPage,
+  VerifyEmailPage,
   LogoutPage,
   AdminPage,
   ProfilePage,
@@ -36,6 +37,7 @@ function App() {
           {/* Auth */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/logout" element={<LogoutPage />} />
           <Route path="/profile" element={<ProfilePage />} />
 

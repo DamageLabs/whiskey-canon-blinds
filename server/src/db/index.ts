@@ -161,6 +161,25 @@ export function initializeDatabase() {
     // Column already exists
   }
 
+  // Email verification columns
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN verification_code TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN verification_code_expires_at INTEGER;`);
+  } catch {
+    // Column already exists
+  }
+
   console.log('Database initialized');
 }
 

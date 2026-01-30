@@ -31,6 +31,7 @@ This is a full-stack blind whiskey tasting application with real-time synchroniz
 ### Frontend (React 19 + TypeScript)
 
 **State Management**: Zustand stores in `src/store/`
+
 - `authStore.ts` - User authentication state, persisted to localStorage
 - `sessionStore.ts` - Tasting session state, WebSocket event handlers
 
@@ -45,6 +46,7 @@ This is a full-stack blind whiskey tasting application with real-time synchroniz
 **Database**: SQLite via Drizzle ORM. Schema in `server/src/db/schema.ts`. Tables: users, sessions, whiskeys, participants, scores, refreshTokens.
 
 **Authentication**: Three token types in `server/src/middleware/auth.ts`:
+
 - Access token (JWT) - Registered user authentication
 - Refresh token - Token renewal
 - Participant token - Guest participant authentication for sessions
@@ -52,6 +54,7 @@ This is a full-stack blind whiskey tasting application with real-time synchroniz
 **Real-time**: Socket.io in `server/src/socket/index.ts`. Participants join session rooms; events broadcast phase changes, scores, and status updates.
 
 **Routes**:
+
 - `/api/auth/*` - Authentication (register, login, profile updates, avatar upload)
 - `/api/sessions/*` - Session CRUD, join, start, advance phase, reveal
 - `/api/scores/*` - Score submission
@@ -68,6 +71,7 @@ This is a full-stack blind whiskey tasting application with real-time synchroniz
 ### Database Changes
 
 When adding columns to existing tables, run ALTER TABLE directly on `data/whiskey.db`:
+
 ```bash
 sqlite3 data/whiskey.db "ALTER TABLE table_name ADD COLUMN column_name TYPE;"
 ```
@@ -79,6 +83,7 @@ Avatar uploads stored in `uploads/avatars/`. Multer configured in `server/src/ro
 ## Git Commit Guidelines
 
 When committing changes:
+
 - Do not include any AI attribution or co-author tags in commit messages or PRs
 - Use `fusion94@gmail.com` for commit author attribution
 - Use `git add .` to stage all changes
@@ -89,6 +94,7 @@ When committing changes:
   - Reference any relevant context (e.g., feature additions, bug fixes, refactors)
 
 When creating Pull Requests (on branches other than main):
+
 - Only include changes since the last PR (not cumulative changes since branching)
 - Use a short summary line (50 chars or less) as the PR title
 - Include detailed bullet points describing each change in the PR body

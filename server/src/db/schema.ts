@@ -21,6 +21,9 @@ export const users = sqliteTable('users', {
   experienceLevel: text('experience_level'), // Tasting experience level
   role: text('role').notNull().default('user'), // 'user' or 'admin'
   isProfilePublic: integer('is_profile_public', { mode: 'boolean' }).notNull().default(true), // Privacy toggle
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false), // Email verification status
+  verificationCode: text('verification_code'), // 6-digit verification code
+  verificationCodeExpiresAt: integer('verification_code_expires_at', { mode: 'timestamp' }), // Code expiration
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
