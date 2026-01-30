@@ -100,10 +100,14 @@ export function initializeDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_sessions_invite_code ON sessions(invite_code);
     CREATE INDEX IF NOT EXISTS idx_sessions_moderator ON sessions(moderator_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
     CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(session_id);
+    CREATE INDEX IF NOT EXISTS idx_participants_user ON participants(user_id);
     CREATE INDEX IF NOT EXISTS idx_whiskeys_session ON whiskeys(session_id);
     CREATE INDEX IF NOT EXISTS idx_scores_session ON scores(session_id);
     CREATE INDEX IF NOT EXISTS idx_scores_participant ON scores(participant_id);
+    CREATE INDEX IF NOT EXISTS idx_scores_whiskey ON scores(whiskey_id);
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 
     -- Social features: Follows table
     CREATE TABLE IF NOT EXISTS follows (

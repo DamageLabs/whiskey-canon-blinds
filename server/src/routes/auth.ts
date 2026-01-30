@@ -5,7 +5,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { db, schema } from '../db/index.js';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import {
   AuthRequest,
   generateAccessToken,
@@ -863,51 +863,40 @@ router.get('/me/export', authenticateUser, async (req: AuthRequest, res: Respons
       where: eq(schema.sessions.moderatorId, userId),
     });
 
-    // Get all participations
-    const participations = await db.query.participants.findMany({
-      where: eq(schema.participants.userId, userId),
-    });
+    // Get all participations with session details in a single JOIN query
+    const participationsWithSessions = await db
+      .select({
+        participation: schema.participants,
+        session: {
+          id: schema.sessions.id,
+          name: schema.sessions.name,
+        },
+      })
+      .from(schema.participants)
+      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .where(eq(schema.participants.userId, userId));
 
-    // Get all scores for user's participations
-    const participantIds = participations.map(p => p.id);
-    const allScores = participantIds.length > 0
-      ? await db.select().from(schema.scores).where(
-          // Get scores for all participant IDs
-          eq(schema.scores.participantId, participantIds[0])
-        )
-      : [];
-
-    // For multiple participant IDs, fetch all scores
-    const userScores: typeof allScores = [];
-    for (const pid of participantIds) {
-      const scores = await db.query.scores.findMany({
-        where: eq(schema.scores.participantId, pid),
-      });
-      userScores.push(...scores);
-    }
-
-    // Get whiskey details for scores
-    const whiskeyIds = [...new Set(userScores.map(s => s.whiskeyId))];
-    const whiskeys: Record<string, typeof schema.whiskeys.$inferSelect> = {};
-    for (const wid of whiskeyIds) {
-      const whiskey = await db.query.whiskeys.findFirst({
-        where: eq(schema.whiskeys.id, wid),
-      });
-      if (whiskey) whiskeys[wid] = whiskey;
-    }
-
-    // Get session details
-    const sessionIds = [...new Set([
-      ...participations.map(p => p.sessionId),
-      ...moderatedSessions.map(s => s.id),
-    ])];
-    const sessionsMap: Record<string, typeof schema.sessions.$inferSelect> = {};
-    for (const sid of sessionIds) {
-      const session = await db.query.sessions.findFirst({
-        where: eq(schema.sessions.id, sid),
-      });
-      if (session) sessionsMap[sid] = session;
-    }
+    // Get all scores with whiskey and session details in a single JOIN query
+    const scoresWithDetails = await db
+      .select({
+        score: schema.scores,
+        whiskey: {
+          id: schema.whiskeys.id,
+          name: schema.whiskeys.name,
+          distillery: schema.whiskeys.distillery,
+          age: schema.whiskeys.age,
+          proof: schema.whiskeys.proof,
+        },
+        session: {
+          id: schema.sessions.id,
+          name: schema.sessions.name,
+        },
+      })
+      .from(schema.scores)
+      .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+      .innerJoin(schema.whiskeys, eq(schema.scores.whiskeyId, schema.whiskeys.id))
+      .innerJoin(schema.sessions, eq(schema.scores.sessionId, schema.sessions.id))
+      .where(eq(schema.participants.userId, userId));
 
     // Get followers and following
     const followers = await db.query.follows.findMany({
@@ -946,50 +935,43 @@ router.get('/me/export', authenticateUser, async (req: AuthRequest, res: Respons
           scheduledAt: s.scheduledAt,
           createdAt: s.createdAt,
         })),
-        participated: participations.map(p => {
-          const session = sessionsMap[p.sessionId];
-          return {
-            sessionId: p.sessionId,
-            sessionName: session?.name,
-            joinedAt: p.joinedAt,
-            status: p.status,
-          };
-        }),
+        participated: participationsWithSessions.map(p => ({
+          sessionId: p.participation.sessionId,
+          sessionName: p.session.name,
+          joinedAt: p.participation.joinedAt,
+          status: p.participation.status,
+        })),
       },
-      tastingNotes: userScores.map(score => {
-        const whiskey = whiskeys[score.whiskeyId];
-        const session = sessionsMap[score.sessionId];
-        return {
-          id: score.id,
-          session: {
-            id: score.sessionId,
-            name: session?.name,
-          },
-          whiskey: {
-            id: score.whiskeyId,
-            name: whiskey?.name,
-            distillery: whiskey?.distillery,
-            age: whiskey?.age,
-            proof: whiskey?.proof,
-          },
-          scores: {
-            nose: score.nose,
-            palate: score.palate,
-            finish: score.finish,
-            overall: score.overall,
-            total: score.totalScore,
-          },
-          notes: {
-            nose: score.noseNotes,
-            palate: score.palateNotes,
-            finish: score.finishNotes,
-            general: score.generalNotes,
-          },
-          identityGuess: score.identityGuess,
-          isPublic: score.isPublic,
-          lockedAt: score.lockedAt,
-        };
-      }),
+      tastingNotes: scoresWithDetails.map(s => ({
+        id: s.score.id,
+        session: {
+          id: s.session.id,
+          name: s.session.name,
+        },
+        whiskey: {
+          id: s.whiskey.id,
+          name: s.whiskey.name,
+          distillery: s.whiskey.distillery,
+          age: s.whiskey.age,
+          proof: s.whiskey.proof,
+        },
+        scores: {
+          nose: s.score.nose,
+          palate: s.score.palate,
+          finish: s.score.finish,
+          overall: s.score.overall,
+          total: s.score.totalScore,
+        },
+        notes: {
+          nose: s.score.noseNotes,
+          palate: s.score.palateNotes,
+          finish: s.score.finishNotes,
+          general: s.score.generalNotes,
+        },
+        identityGuess: s.score.identityGuess,
+        isPublic: s.score.isPublic,
+        lockedAt: s.score.lockedAt,
+      })),
     };
 
     // Log data export
@@ -1016,68 +998,46 @@ router.get('/me/export/tastings', authenticateUser, async (req: AuthRequest, res
     const userId = req.userId!;
     const format = (req.query.format as string) || 'csv';
 
-    // Get all participations for user
-    const participations = await db.query.participants.findMany({
-      where: eq(schema.participants.userId, userId),
-    });
+    // Single JOIN query to get all tasting data with whiskey and session details
+    const tastingData = await db
+      .select({
+        score: schema.scores,
+        whiskey: {
+          name: schema.whiskeys.name,
+          distillery: schema.whiskeys.distillery,
+          age: schema.whiskeys.age,
+          proof: schema.whiskeys.proof,
+        },
+        session: {
+          name: schema.sessions.name,
+        },
+      })
+      .from(schema.scores)
+      .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+      .innerJoin(schema.whiskeys, eq(schema.scores.whiskeyId, schema.whiskeys.id))
+      .innerJoin(schema.sessions, eq(schema.scores.sessionId, schema.sessions.id))
+      .where(eq(schema.participants.userId, userId))
+      .orderBy(desc(schema.scores.lockedAt));
 
-    // Get all scores for user's participations
-    const participantIds = participations.map(p => p.id);
-    const userScores: (typeof schema.scores.$inferSelect)[] = [];
-    for (const pid of participantIds) {
-      const scores = await db.query.scores.findMany({
-        where: eq(schema.scores.participantId, pid),
-      });
-      userScores.push(...scores);
-    }
-
-    // Get whiskey and session details
-    const whiskeyIds = [...new Set(userScores.map(s => s.whiskeyId))];
-    const sessionIds = [...new Set(userScores.map(s => s.sessionId))];
-
-    const whiskeys: Record<string, typeof schema.whiskeys.$inferSelect> = {};
-    const sessions: Record<string, typeof schema.sessions.$inferSelect> = {};
-
-    for (const wid of whiskeyIds) {
-      const whiskey = await db.query.whiskeys.findFirst({
-        where: eq(schema.whiskeys.id, wid),
-      });
-      if (whiskey) whiskeys[wid] = whiskey;
-    }
-
-    for (const sid of sessionIds) {
-      const session = await db.query.sessions.findFirst({
-        where: eq(schema.sessions.id, sid),
-      });
-      if (session) sessions[sid] = session;
-    }
-
-    // Build tasting data
-    const tastings = userScores.map(score => {
-      const whiskey = whiskeys[score.whiskeyId];
-      const session = sessions[score.sessionId];
-      return {
-        date: score.lockedAt ? new Date(score.lockedAt).toISOString().split('T')[0] : '',
-        sessionName: session?.name || '',
-        whiskeyName: whiskey?.name || '',
-        distillery: whiskey?.distillery || '',
-        age: whiskey?.age || '',
-        proof: whiskey?.proof || '',
-        noseScore: score.nose,
-        palateScore: score.palate,
-        finishScore: score.finish,
-        overallScore: score.overall,
-        totalScore: score.totalScore,
-        noseNotes: score.noseNotes || '',
-        palateNotes: score.palateNotes || '',
-        finishNotes: score.finishNotes || '',
-        generalNotes: score.generalNotes || '',
-        identityGuess: score.identityGuess || '',
-      };
-    });
-
-    // Sort by date descending
-    tastings.sort((a, b) => b.date.localeCompare(a.date));
+    // Transform to tasting records
+    const tastings = tastingData.map(t => ({
+      date: t.score.lockedAt ? new Date(t.score.lockedAt).toISOString().split('T')[0] : '',
+      sessionName: t.session.name || '',
+      whiskeyName: t.whiskey.name || '',
+      distillery: t.whiskey.distillery || '',
+      age: t.whiskey.age || '',
+      proof: t.whiskey.proof || '',
+      noseScore: t.score.nose,
+      palateScore: t.score.palate,
+      finishScore: t.score.finish,
+      overallScore: t.score.overall,
+      totalScore: t.score.totalScore,
+      noseNotes: t.score.noseNotes || '',
+      palateNotes: t.score.palateNotes || '',
+      finishNotes: t.score.finishNotes || '',
+      generalNotes: t.score.generalNotes || '',
+      identityGuess: t.score.identityGuess || '',
+    }));
 
     if (format === 'csv') {
       // Generate CSV

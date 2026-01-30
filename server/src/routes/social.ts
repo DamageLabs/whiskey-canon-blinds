@@ -461,19 +461,130 @@ router.get('/profile/:userId/stats', async (req: AuthRequest, res: Response) => 
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get all participant records for this user
-    const participantRecords = await db.query.participants.findMany({
-      where: eq(schema.participants.userId, userId),
+    // Single query to get overview stats using SQL aggregates
+    const overviewStats = await db
+      .select({
+        sessionsCount: sql<number>`COUNT(DISTINCT CASE WHEN ${schema.sessions.status} = 'completed' THEN ${schema.participants.sessionId} END)`,
+        whiskeysCount: sql<number>`COUNT(${schema.scores.id})`,
+      })
+      .from(schema.participants)
+      .leftJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .leftJoin(schema.scores, eq(schema.scores.participantId, schema.participants.id))
+      .where(eq(schema.participants.userId, userId));
+
+    const sessionsAttendedCount = overviewStats[0]?.sessionsCount || 0;
+    const totalWhiskeysRated = overviewStats[0]?.whiskeysCount || 0;
+
+    // Single query for score averages using SQL aggregates
+    const scoreAverages = await db
+      .select({
+        avgNose: sql<number>`AVG(${schema.scores.nose})`,
+        avgPalate: sql<number>`AVG(${schema.scores.palate})`,
+        avgFinish: sql<number>`AVG(${schema.scores.finish})`,
+        avgOverall: sql<number>`AVG(${schema.scores.overall})`,
+        avgTotal: sql<number>`AVG(${schema.scores.totalScore})`,
+      })
+      .from(schema.scores)
+      .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+      .where(eq(schema.participants.userId, userId));
+
+    const avgNose = scoreAverages[0]?.avgNose || 0;
+    const avgPalate = scoreAverages[0]?.avgPalate || 0;
+    const avgFinish = scoreAverages[0]?.avgFinish || 0;
+    const avgOverall = scoreAverages[0]?.avgOverall || 0;
+    const avgTotal = scoreAverages[0]?.avgTotal || 0;
+
+    // Single query for score distribution using SQL GROUP BY
+    const distributionData = await db
+      .select({
+        bucket: sql<number>`MIN(10, MAX(1, ROUND(${schema.scores.totalScore})))`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(schema.scores)
+      .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+      .where(eq(schema.participants.userId, userId))
+      .groupBy(sql`MIN(10, MAX(1, ROUND(${schema.scores.totalScore})))`);
+
+    // Initialize distribution with zeros and fill from query
+    const scoreDistribution: Record<number, number> = {};
+    for (let i = 1; i <= 10; i++) {
+      scoreDistribution[i] = 0;
+    }
+    distributionData.forEach(d => {
+      if (d.bucket >= 1 && d.bucket <= 10) {
+        scoreDistribution[d.bucket] = d.count;
+      }
     });
 
-    const participantIds = participantRecords.map(p => p.id);
+    // Single query for categories explored
+    const categoriesData = await db
+      .select({ theme: schema.sessions.theme })
+      .from(schema.participants)
+      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .where(eq(schema.participants.userId, userId))
+      .groupBy(schema.sessions.theme);
 
-    // Get unique sessions attended (completed sessions only)
-    const sessionsAttended = await db
+    const categoriesExplored = categoriesData
+      .map(c => c.theme)
+      .filter((t): t is string => t !== null && t !== '');
+
+    // Single query for notes (only fetch if user has scores)
+    let favoriteNotes: { term: string; count: number }[] = [];
+    if (totalWhiskeysRated > 0) {
+      const notesData = await db
+        .select({
+          noseNotes: schema.scores.noseNotes,
+          palateNotes: schema.scores.palateNotes,
+          finishNotes: schema.scores.finishNotes,
+          generalNotes: schema.scores.generalNotes,
+        })
+        .from(schema.scores)
+        .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+        .where(eq(schema.participants.userId, userId));
+
+      // Combine all notes for analysis
+      const allNotes = notesData.flatMap(n => [
+        n.noseNotes, n.palateNotes, n.finishNotes, n.generalNotes
+      ].filter(Boolean)).join(' ').toLowerCase();
+
+      // Simple word frequency analysis for common tasting terms
+      const tastingTerms = [
+        'vanilla', 'caramel', 'oak', 'honey', 'spice', 'cinnamon', 'cherry', 'apple',
+        'pear', 'citrus', 'orange', 'lemon', 'chocolate', 'coffee', 'toffee', 'butterscotch',
+        'smoke', 'peat', 'leather', 'tobacco', 'nuts', 'almond', 'walnut', 'maple',
+        'brown sugar', 'molasses', 'pepper', 'clove', 'nutmeg', 'ginger', 'mint',
+        'floral', 'fruity', 'sweet', 'dry', 'smooth', 'bold', 'rich', 'complex',
+        'balanced', 'warm', 'heat', 'burn', 'long', 'short', 'finish'
+      ];
+
+      const termCounts: Record<string, number> = {};
+      tastingTerms.forEach(term => {
+        const regex = new RegExp(`\\b${term}\\b`, 'gi');
+        const matches = allNotes.match(regex);
+        if (matches && matches.length > 0) {
+          termCounts[term] = matches.length;
+        }
+      });
+
+      favoriteNotes = Object.entries(termCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([term, count]) => ({ term, count }));
+    }
+
+    // Calculate scoring tendency
+    let scoringTendency = 'balanced';
+    if (avgTotal > 0) {
+      if (avgTotal >= 7.5) scoringTendency = 'generous';
+      else if (avgTotal <= 5.5) scoringTendency = 'critical';
+    }
+
+    // Single query for recent sessions (limit 5)
+    const recentSessions = await db
       .select({
-        sessionId: schema.participants.sessionId,
-        sessionName: schema.sessions.name,
-        sessionTheme: schema.sessions.theme,
+        id: schema.participants.sessionId,
+        name: schema.sessions.name,
+        theme: schema.sessions.theme,
         completedAt: schema.sessions.updatedAt,
       })
       .from(schema.participants)
@@ -482,111 +593,14 @@ router.get('/profile/:userId/stats', async (req: AuthRequest, res: Response) => 
         eq(schema.participants.userId, userId),
         eq(schema.sessions.status, 'completed')
       ))
-      .orderBy(desc(schema.sessions.updatedAt));
-
-    // Get all scores for this user
-    const allScores = participantIds.length > 0
-      ? await db
-          .select({
-            score: schema.scores,
-            whiskey: schema.whiskeys,
-          })
-          .from(schema.scores)
-          .innerJoin(schema.whiskeys, eq(schema.scores.whiskeyId, schema.whiskeys.id))
-          .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
-          .where(eq(schema.participants.userId, userId))
-      : [];
-
-    const totalWhiskeysRated = allScores.length;
-
-    // Calculate average scores
-    let avgNose = 0, avgPalate = 0, avgFinish = 0, avgOverall = 0, avgTotal = 0;
-    if (totalWhiskeysRated > 0) {
-      avgNose = allScores.reduce((sum, s) => sum + s.score.nose, 0) / totalWhiskeysRated;
-      avgPalate = allScores.reduce((sum, s) => sum + s.score.palate, 0) / totalWhiskeysRated;
-      avgFinish = allScores.reduce((sum, s) => sum + s.score.finish, 0) / totalWhiskeysRated;
-      avgOverall = allScores.reduce((sum, s) => sum + s.score.overall, 0) / totalWhiskeysRated;
-      avgTotal = allScores.reduce((sum, s) => sum + s.score.totalScore, 0) / totalWhiskeysRated;
-    }
-
-    // Calculate score distribution (1-10 buckets)
-    const scoreDistribution: Record<number, number> = {};
-    for (let i = 1; i <= 10; i++) {
-      scoreDistribution[i] = 0;
-    }
-    allScores.forEach(s => {
-      const roundedTotal = Math.round(s.score.totalScore);
-      const bucket = Math.min(10, Math.max(1, roundedTotal));
-      scoreDistribution[bucket]++;
-    });
-
-    // Get categories explored (unique whiskey themes/regions)
-    const categoriesExplored = new Set<string>();
-    const sessionsWithThemes = await db
-      .select({ theme: schema.sessions.theme })
-      .from(schema.participants)
-      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
-      .where(eq(schema.participants.userId, userId));
-
-    sessionsWithThemes.forEach(s => {
-      if (s.theme) categoriesExplored.add(s.theme);
-    });
-
-    // Extract common words from tasting notes
-    const allNotes: string[] = [];
-    allScores.forEach(s => {
-      if (s.score.noseNotes) allNotes.push(s.score.noseNotes);
-      if (s.score.palateNotes) allNotes.push(s.score.palateNotes);
-      if (s.score.finishNotes) allNotes.push(s.score.finishNotes);
-      if (s.score.generalNotes) allNotes.push(s.score.generalNotes);
-    });
-
-    // Simple word frequency analysis for common tasting terms
-    const tastingTerms = [
-      'vanilla', 'caramel', 'oak', 'honey', 'spice', 'cinnamon', 'cherry', 'apple',
-      'pear', 'citrus', 'orange', 'lemon', 'chocolate', 'coffee', 'toffee', 'butterscotch',
-      'smoke', 'peat', 'leather', 'tobacco', 'nuts', 'almond', 'walnut', 'maple',
-      'brown sugar', 'molasses', 'pepper', 'clove', 'nutmeg', 'ginger', 'mint',
-      'floral', 'fruity', 'sweet', 'dry', 'smooth', 'bold', 'rich', 'complex',
-      'balanced', 'warm', 'heat', 'burn', 'long', 'short', 'finish'
-    ];
-
-    const notesText = allNotes.join(' ').toLowerCase();
-    const termCounts: Record<string, number> = {};
-    tastingTerms.forEach(term => {
-      const regex = new RegExp(`\\b${term}\\b`, 'gi');
-      const matches = notesText.match(regex);
-      if (matches && matches.length > 0) {
-        termCounts[term] = matches.length;
-      }
-    });
-
-    // Get top 10 most used terms
-    const favoriteNotes = Object.entries(termCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([term, count]) => ({ term, count }));
-
-    // Calculate scoring tendency (are they a tough or generous scorer?)
-    let scoringTendency = 'balanced';
-    if (avgTotal > 0) {
-      if (avgTotal >= 7.5) scoringTendency = 'generous';
-      else if (avgTotal <= 5.5) scoringTendency = 'critical';
-    }
-
-    // Recent activity (last 5 sessions)
-    const recentSessions = sessionsAttended.slice(0, 5).map(s => ({
-      id: s.sessionId,
-      name: s.sessionName,
-      theme: s.sessionTheme,
-      completedAt: s.completedAt,
-    }));
+      .orderBy(desc(schema.sessions.updatedAt))
+      .limit(5);
 
     return res.json({
       overview: {
-        sessionsAttended: sessionsAttended.length,
+        sessionsAttended: sessionsAttendedCount,
         whiskeysRated: totalWhiskeysRated,
-        categoriesExplored: Array.from(categoriesExplored),
+        categoriesExplored,
       },
       scoringTendencies: {
         averages: {
@@ -622,46 +636,23 @@ router.get('/profile/:userId/achievements', async (req: AuthRequest, res: Respon
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get statistics needed for achievements
-    const participantRecords = await db.query.participants.findMany({
-      where: eq(schema.participants.userId, userId),
-    });
-
-    // Get completed sessions count
-    const completedSessions = await db
-      .select({ count: sql<number>`count(DISTINCT ${schema.participants.sessionId})` })
+    // Single query to get all achievement stats using SQL aggregates
+    const achievementStats = await db
+      .select({
+        sessionsCount: sql<number>`COUNT(DISTINCT CASE WHEN ${schema.sessions.status} = 'completed' THEN ${schema.participants.sessionId} END)`,
+        whiskeysCount: sql<number>`COUNT(${schema.scores.id})`,
+        categoriesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${schema.sessions.status} = 'completed' THEN ${schema.sessions.theme} END)`,
+      })
       .from(schema.participants)
-      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
-      .where(and(
-        eq(schema.participants.userId, userId),
-        eq(schema.sessions.status, 'completed')
-      ));
-
-    const sessionsCount = completedSessions[0]?.count || 0;
-
-    // Get whiskeys rated count
-    const whiskeysRated = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(schema.scores)
-      .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+      .leftJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
+      .leftJoin(schema.scores, eq(schema.scores.participantId, schema.participants.id))
       .where(eq(schema.participants.userId, userId));
 
-    const whiskeysCount = whiskeysRated[0]?.count || 0;
+    const sessionsCount = achievementStats[0]?.sessionsCount || 0;
+    const whiskeysCount = achievementStats[0]?.whiskeysCount || 0;
+    const categoriesCount = achievementStats[0]?.categoriesCount || 0;
 
-    // Get categories explored
-    const categoriesResult = await db
-      .select({ theme: schema.sessions.theme })
-      .from(schema.participants)
-      .innerJoin(schema.sessions, eq(schema.participants.sessionId, schema.sessions.id))
-      .where(and(
-        eq(schema.participants.userId, userId),
-        eq(schema.sessions.status, 'completed')
-      ));
-
-    const uniqueCategories = new Set(categoriesResult.map(c => c.theme).filter(Boolean));
-    const categoriesCount = uniqueCategories.size;
-
-    // Get sessions where user was moderator
+    // Get sessions where user was moderator (separate query since it's a different relationship)
     const moderatedSessions = await db
       .select({ count: sql<number>`count(*)` })
       .from(schema.sessions)

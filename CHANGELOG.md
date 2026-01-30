@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Optional field to limit session capacity (2-50 participants)
   - Backend enforcement rejects joins when session is full
 
+### Changed
+- Performance improvements (Phase 1)
+  - Added database indexes for foreign keys: `participants.user_id`, `scores.whiskey_id`, `sessions.status`, `refresh_tokens.user_id`
+  - Refactored social stats endpoint to use SQL aggregates instead of N+1 queries
+  - Refactored achievements endpoint to use single aggregate query
+  - Refactored data export endpoints to use JOINs instead of sequential queries
+  - Tasting history export now uses single JOIN query with ORDER BY
+
 ### Security
 - Phase 2 security improvements
   - Reduced token expiration times (access/participant tokens: 24h → 15m, with 7-day refresh)
