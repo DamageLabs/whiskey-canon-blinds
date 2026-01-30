@@ -50,4 +50,4 @@ uploads/avatars/*
 *.sw?
 
 # TypeScript
-*.tsbuildinfo
+*.tsbuildinfocoverage/
