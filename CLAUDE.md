@@ -79,7 +79,7 @@ Avatar uploads stored in `uploads/avatars/`. Multer configured in `server/src/ro
 ## Git Commit Guidelines
 
 When committing changes:
-- Do not include any AI attribution or co-author tags in commit messages
+- Do not include any AI attribution or co-author tags in commit messages or PRs
 - Use `fusion94@gmail.com` for commit author attribution
 - Use `git add .` to stage all changes
 - Generate a comprehensive commit message covering all changes since the last commit:
