@@ -59,6 +59,16 @@ Scores use a 1-10 scale. The total is a weighted average.
 - **Real-time**: Socket.io for live synchronization
 - **Auth**: JWT with refresh tokens
 
+## Security
+
+The application implements several security measures:
+
+- **JWT Authentication** - Secure token-based auth with required secret validation at startup
+- **Rate Limiting** - Protection against brute force attacks on auth endpoints (5 requests/15 min for login/register, 10 requests/15 min for verification)
+- **Security Headers** - Helmet.js provides protection against common web vulnerabilities (XSS, clickjacking, etc.)
+- **Cryptographic RNG** - Verification codes and invite codes use Node.js crypto module instead of Math.random()
+- **Password Hashing** - bcrypt with cost factor 12
+
 ## Getting Started
 
 See [docs.md](docs.md) for installation instructions, API documentation, and project structure.
@@ -68,8 +78,25 @@ See [docs.md](docs.md) for installation instructions, API documentation, and pro
 git clone https://github.com/fusion94/whiskey-canon-blinds.git
 cd whiskey-canon-blinds
 npm install
+
+# Configure environment (required)
+cp .env.example .env
+# Generate a secure JWT secret:
+openssl rand -base64 32
+# Add the generated secret to .env as JWT_SECRET
+
 npm run dev
 ```
+
+### Required Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | **Required.** Secret key for signing JWTs. Generate with `openssl rand -base64 32` |
+| `PORT` | Server port (default: 3001) |
+| `CLIENT_URL` | Frontend URL for CORS (default: http://localhost:5173) |
+| `RESEND_API_KEY` | Optional. Resend API key for sending emails |
+| `FROM_EMAIL` | Optional. Sender email address |
 
 ## License
 

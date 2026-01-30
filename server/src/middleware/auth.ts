@@ -2,7 +2,19 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import type { UserRole } from '../db/schema.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'whiskey-canon-secret-change-in-production';
+// Validate and retrieve JWT secret - throws if not configured
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required but not set');
+  }
+  return secret;
+}
+
+// Validate JWT secret at startup
+export function validateJwtSecret(): void {
+  getJwtSecret();
+}
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -31,7 +43,7 @@ export function authenticateUser(req: AuthRequest, res: Response, next: NextFunc
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload;
     req.userId = decoded.userId;
     req.userRole = decoded.role;
     next();
@@ -57,7 +69,7 @@ export function authenticateParticipant(req: AuthRequest, res: Response, next: N
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as ParticipantJwtPayload;
+    const decoded = jwt.verify(token, getJwtSecret()) as ParticipantJwtPayload;
     req.participantId = decoded.participantId;
     next();
   } catch {
@@ -72,7 +84,7 @@ export function authenticateAny(req: AuthRequest, res: Response, next: NextFunct
 
   if (userToken) {
     try {
-      const decoded = jwt.verify(userToken, JWT_SECRET) as JwtPayload;
+      const decoded = jwt.verify(userToken, getJwtSecret()) as JwtPayload;
       req.userId = decoded.userId;
       return next();
     } catch {
@@ -82,7 +94,7 @@ export function authenticateAny(req: AuthRequest, res: Response, next: NextFunct
 
   if (participantToken) {
     try {
-      const decoded = jwt.verify(participantToken, JWT_SECRET) as ParticipantJwtPayload;
+      const decoded = jwt.verify(participantToken, getJwtSecret()) as ParticipantJwtPayload;
       req.participantId = decoded.participantId;
       return next();
     } catch {
@@ -95,17 +107,17 @@ export function authenticateAny(req: AuthRequest, res: Response, next: NextFunct
 
 // Generate tokens
 export function generateAccessToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
 }
 
 export function generateRefreshToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 }
 
 export function generateParticipantToken(payload: ParticipantJwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
 }
 
 export function verifyToken(token: string): JwtPayload | ParticipantJwtPayload {
-  return jwt.verify(token, JWT_SECRET) as JwtPayload | ParticipantJwtPayload;
+  return jwt.verify(token, getJwtSecret()) as JwtPayload | ParticipantJwtPayload;
 }

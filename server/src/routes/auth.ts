@@ -14,6 +14,7 @@ import {
   verifyToken,
   JwtPayload,
 } from '../middleware/auth.js';
+import { authLimiter, verificationLimiter } from '../middleware/rateLimit.js';
 import { validateEmail, normalizeEmail } from '../utils/validation.js';
 import {
   generateVerificationCode,
@@ -57,7 +58,7 @@ const avatarUpload = multer({
 });
 
 // Register a new user (sends verification email, no tokens until verified)
-router.post('/register', async (req: AuthRequest, res: Response) => {
+router.post('/register', authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email, password, displayName } = req.body;
 
@@ -152,7 +153,7 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
 });
 
 // Verify email with 6-digit code
-router.post('/verify-email', async (req: AuthRequest, res: Response) => {
+router.post('/verify-email', verificationLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email, code } = req.body;
 
@@ -239,7 +240,7 @@ router.post('/verify-email', async (req: AuthRequest, res: Response) => {
 });
 
 // Resend verification code
-router.post('/resend-verification', async (req: AuthRequest, res: Response) => {
+router.post('/resend-verification', verificationLimiter, async (req: AuthRequest, res: Response) => {
   console.log('[Auth] Resend verification request:', req.body);
   try {
     const { email } = req.body;
@@ -293,7 +294,7 @@ router.post('/resend-verification', async (req: AuthRequest, res: Response) => {
 });
 
 // Request password reset
-router.post('/forgot-password', async (req: AuthRequest, res: Response) => {
+router.post('/forgot-password', authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email } = req.body;
 
@@ -341,7 +342,7 @@ router.post('/forgot-password', async (req: AuthRequest, res: Response) => {
 });
 
 // Reset password with code
-router.post('/reset-password', async (req: AuthRequest, res: Response) => {
+router.post('/reset-password', verificationLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email, code, newPassword } = req.body;
 
@@ -397,7 +398,7 @@ router.post('/reset-password', async (req: AuthRequest, res: Response) => {
 });
 
 // Login
-router.post('/login', async (req: AuthRequest, res: Response) => {
+router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email, password } = req.body;
 

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { createServer } from 'http';
 import path from 'path';
@@ -7,6 +8,8 @@ import dotenv from 'dotenv';
 
 import { initializeDatabase } from './db/index.js';
 import { initializeSocket } from './socket/index.js';
+import { validateJwtSecret } from './middleware/auth.js';
+import { generalLimiter } from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.js';
 import sessionsRoutes from './routes/sessions.js';
 import scoresRoutes from './routes/scores.js';
@@ -17,6 +20,9 @@ import socialRoutes from './routes/social.js';
 // Load environment variables
 dotenv.config();
 
+// Validate required environment variables at startup
+validateJwtSecret();
+
 const app = express();
 const httpServer = createServer(app);
 
@@ -24,12 +30,16 @@ const httpServer = createServer(app);
 initializeSocket(httpServer);
 
 // Middleware
+app.use(helmet());
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Apply general rate limiting to all API routes
+app.use('/api', generalLimiter);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'dist', 'uploads')));

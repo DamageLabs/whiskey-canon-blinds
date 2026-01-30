@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { randomInt } from 'crypto';
 
 const APP_NAME = 'Whiskey Canon';
 
@@ -17,9 +18,9 @@ function getFromEmail(): string {
   return process.env.FROM_EMAIL || 'Whiskey Canon <onboarding@resend.dev>';
 }
 
-// Generate a 6-digit verification code
+// Generate a 6-digit verification code using cryptographic RNG
 export function generateVerificationCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 // Code expires in 15 minutes
