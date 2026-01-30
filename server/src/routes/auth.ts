@@ -15,7 +15,7 @@ import {
   JwtPayload,
 } from '../middleware/auth.js';
 import { authLimiter, verificationLimiter, exportLimiter } from '../middleware/rateLimit.js';
-import { validateEmail, normalizeEmail, validatePassword } from '../utils/validation.js';
+import { validateEmail, normalizeEmail, validatePassword, validateImageMagicBytes } from '../utils/validation.js';
 import {
   generateVerificationCode,
   getCodeExpiration,
@@ -520,9 +520,11 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    const normalizedEmail = normalizeEmail(email);
+
     // Find user
     const user = await db.query.users.findFirst({
-      where: eq(schema.users.email, email.toLowerCase()),
+      where: eq(schema.users.email, normalizedEmail),
     });
 
     if (!user) {
@@ -875,12 +877,24 @@ router.post('/me/avatar', authenticateUser, avatarUpload.single('avatar'), async
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    // Validate file content by checking magic bytes (prevent spoofed MIME types)
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const detectedType = validateImageMagicBytes(fileBuffer);
+
+    if (!detectedType) {
+      // Delete the uploaded file since it's not a valid image
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Invalid file content. File must be a valid JPEG, PNG, GIF, or WebP image.' });
+    }
+
     // Get current user to check for existing avatar
     const user = await db.query.users.findFirst({
       where: eq(schema.users.id, req.userId!),
     });
 
     if (!user) {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -902,6 +916,10 @@ router.post('/me/avatar', authenticateUser, avatarUpload.single('avatar'), async
     return res.json({ message: 'Avatar uploaded successfully', avatarUrl });
   } catch (error) {
     console.error('Avatar upload error:', error);
+    // Clean up uploaded file on error
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     return res.status(500).json({ error: 'Failed to upload avatar' });
   }
 });
