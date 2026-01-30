@@ -54,8 +54,28 @@ export type UserRole = 'user' | 'admin';
 
 export const authApi = {
   register: (data: { email: string; password: string; displayName: string }) =>
-    request<{ user: { id: string; email: string; displayName: string; role: UserRole }; accessToken: string }>(
+    request<{
+      message: string;
+      requiresVerification: boolean;
+      email: string;
+      devCode?: string;
+    }>(
       '/auth/register',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  verifyEmail: (data: { email: string; code: string }) =>
+    request<{
+      user: { id: string; email: string; displayName: string; role: UserRole };
+      accessToken: string;
+    }>(
+      '/auth/verify-email',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  resendVerification: (data: { email: string }) =>
+    request<{ message: string; devCode?: string }>(
+      '/auth/resend-verification',
       { method: 'POST', body: JSON.stringify(data) }
     ),
 

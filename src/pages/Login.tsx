@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -5,6 +6,7 @@ import { z } from 'zod';
 import { Button, Input, Card, CardContent } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { validateEmail } from '@/utils/validation';
+import { ApiError } from '@/services/api';
 
 const loginSchema = z.object({
   email: z.string().refine(
@@ -18,7 +20,8 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login, isLoading, error } = useAuthStore();
+  const { login, isLoading, error, clearError } = useAuthStore();
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
 
   const {
     register,
@@ -29,11 +32,23 @@ export function LoginPage() {
   });
 
   const onSubmit = async (data: LoginFormData) => {
+    clearError();
+    setVerificationEmail(null);
     try {
       await login(data.email, data.password);
       navigate('/');
-    } catch {
-      // Error handled in store
+    } catch (err) {
+      // Check if this is an unverified email error (403)
+      if (err instanceof ApiError && err.status === 403) {
+        setVerificationEmail(data.email);
+      }
+      // Other errors are handled in store
+    }
+  };
+
+  const handleGoToVerify = () => {
+    if (verificationEmail) {
+      navigate('/verify-email', { state: { email: verificationEmail } });
     }
   };
 
@@ -65,7 +80,20 @@ export function LoginPage() {
                 {...register('password')}
               />
 
-              {error && (
+              {verificationEmail && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <p className="text-sm text-amber-400 mb-2">Email not verified. Please verify your email to continue.</p>
+                  <button
+                    type="button"
+                    onClick={handleGoToVerify}
+                    className="text-sm text-amber-500 hover:text-amber-400 underline"
+                  >
+                    Go to verification
+                  </button>
+                </div>
+              )}
+
+              {error && !verificationEmail && (
                 <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
                   <p className="text-sm text-red-400">{error}</p>
                 </div>

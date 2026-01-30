@@ -15,6 +15,11 @@ import {
   JwtPayload,
 } from '../middleware/auth.js';
 import { validateEmail, normalizeEmail } from '../utils/validation.js';
+import {
+  generateVerificationCode,
+  getCodeExpiration,
+  sendVerificationEmail,
+} from '../services/email.js';
 
 const router = Router();
 
@@ -50,7 +55,7 @@ const avatarUpload = multer({
   },
 });
 
-// Register a new user
+// Register a new user (sends verification email, no tokens until verified)
 router.post('/register', async (req: AuthRequest, res: Response) => {
   try {
     const { email, password, displayName } = req.body;
@@ -73,13 +78,44 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     });
 
     if (existing) {
+      // If user exists but is not verified, allow re-registration (update password and resend code)
+      if (!existing.emailVerified) {
+        const verificationCode = generateVerificationCode();
+        const verificationCodeExpiresAt = getCodeExpiration();
+        const passwordHash = await bcrypt.hash(password, 12);
+
+        await db.update(schema.users)
+          .set({
+            passwordHash,
+            displayName,
+            verificationCode,
+            verificationCodeExpiresAt,
+          })
+          .where(eq(schema.users.id, existing.id));
+
+        const emailResult = await sendVerificationEmail(normalizedEmail, verificationCode, displayName);
+        if (!emailResult.success) {
+          return res.status(500).json({ error: emailResult.error || 'Failed to send verification email' });
+        }
+
+        return res.status(200).json({
+          message: 'Verification code sent to your email',
+          requiresVerification: true,
+          email: normalizedEmail,
+          ...(emailResult.devCode && { devCode: emailResult.devCode }),
+        });
+      }
       return res.status(409).json({ error: 'Email already registered' });
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create user
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+    const verificationCodeExpiresAt = getCodeExpiration();
+
+    // Create user (unverified)
     const userId = uuidv4();
     const now = new Date();
 
@@ -88,20 +124,87 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       email: normalizedEmail,
       passwordHash,
       displayName,
+      emailVerified: false,
+      verificationCode,
+      verificationCodeExpiresAt,
       createdAt: now,
     });
 
-    // Generate tokens (new users default to 'user' role)
-    const accessToken = generateAccessToken({ userId, email: normalizedEmail, role: 'user' });
-    const refreshToken = generateRefreshToken({ userId, email: normalizedEmail, role: 'user' });
+    // Send verification email
+    const emailResult = await sendVerificationEmail(normalizedEmail, verificationCode, displayName);
+    if (!emailResult.success) {
+      // Delete user if email fails
+      await db.delete(schema.users).where(eq(schema.users.id, userId));
+      return res.status(500).json({ error: emailResult.error || 'Failed to send verification email' });
+    }
+
+    return res.status(201).json({
+      message: 'Verification code sent to your email',
+      requiresVerification: true,
+      email: normalizedEmail,
+      ...(emailResult.devCode && { devCode: emailResult.devCode }),
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    return res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// Verify email with 6-digit code
+router.post('/verify-email', async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and verification code are required' });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    // Find user
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.email, normalizedEmail),
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ error: 'Email already verified' });
+    }
+
+    // Check code
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    // Check expiration
+    if (!user.verificationCodeExpiresAt || user.verificationCodeExpiresAt < new Date()) {
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+    }
+
+    // Mark as verified and clear code
+    await db.update(schema.users)
+      .set({
+        emailVerified: true,
+        verificationCode: null,
+        verificationCodeExpiresAt: null,
+      })
+      .where(eq(schema.users.id, user.id));
+
+    // Generate tokens (user is now verified)
+    const userRole = (user.role as 'user' | 'admin') || 'user';
+    const accessToken = generateAccessToken({ userId: user.id, email: normalizedEmail, role: userRole });
+    const refreshToken = generateRefreshToken({ userId: user.id, email: normalizedEmail, role: userRole });
 
     // Store refresh token
     await db.insert(schema.refreshTokens).values({
       id: uuidv4(),
-      userId,
+      userId: user.id,
       token: refreshToken,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      createdAt: now,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      createdAt: new Date(),
     });
 
     // Set cookies
@@ -109,28 +212,82 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 15 * 60 * 1000,
     });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.status(201).json({
+    return res.json({
       user: {
-        id: userId,
+        id: user.id,
         email: normalizedEmail,
-        displayName,
-        role: 'user',
+        displayName: user.displayName,
+        role: userRole,
       },
       accessToken,
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    return res.status(500).json({ error: 'Registration failed' });
+    console.error('Verification error:', error);
+    return res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// Resend verification code
+router.post('/resend-verification', async (req: AuthRequest, res: Response) => {
+  console.log('[Auth] Resend verification request:', req.body);
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      console.log('[Auth] Resend verification: no email provided');
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    // Find user
+    const user = await db.query.users.findFirst({
+      where: eq(schema.users.email, normalizedEmail),
+    });
+
+    if (!user) {
+      // Don't reveal if user exists for security
+      return res.json({ message: 'If that email exists, a new verification code has been sent.' });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ error: 'Email already verified' });
+    }
+
+    // Generate new code
+    const verificationCode = generateVerificationCode();
+    const verificationCodeExpiresAt = getCodeExpiration();
+
+    await db.update(schema.users)
+      .set({
+        verificationCode,
+        verificationCodeExpiresAt,
+      })
+      .where(eq(schema.users.id, user.id));
+
+    // Send email
+    const emailResult = await sendVerificationEmail(normalizedEmail, verificationCode, user.displayName);
+    if (!emailResult.success) {
+      return res.status(500).json({ error: 'Failed to send verification email' });
+    }
+
+    return res.json({
+      message: 'If that email exists, a new verification code has been sent.',
+      ...(emailResult.devCode && { devCode: emailResult.devCode }),
+    });
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    return res.status(500).json({ error: 'Failed to resend verification' });
   }
 });
 
@@ -156,6 +313,15 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if email is verified
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        error: 'Email not verified',
+        requiresVerification: true,
+        email: user.email,
+      });
     }
 
     // Generate tokens with user's role
