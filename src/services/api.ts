@@ -2,6 +2,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'htt
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean;
+  skipCsrf?: boolean;
 }
 
 class ApiError extends Error {
@@ -13,8 +14,69 @@ class ApiError extends Error {
   }
 }
 
+// CSRF token management
+let csrfToken: string | null = null;
+let csrfTokenPromise: Promise<string> | null = null;
+
+async function fetchCsrfToken(): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/csrf-token`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch CSRF token');
+  }
+  const data = await response.json();
+  return data.csrfToken;
+}
+
+async function getCsrfToken(): Promise<string> {
+  if (csrfToken) {
+    return csrfToken;
+  }
+
+  // Deduplicate concurrent requests
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = fetchCsrfToken().then(token => {
+      csrfToken = token;
+      csrfTokenPromise = null;
+      return token;
+    }).catch(err => {
+      csrfTokenPromise = null;
+      throw err;
+    });
+  }
+
+  return csrfTokenPromise;
+}
+
+// Clear CSRF token (call on logout or when token is invalidated)
+export function clearCsrfToken(): void {
+  csrfToken = null;
+  csrfTokenPromise = null;
+}
+
+// Routes exempt from CSRF (auth endpoints that don't require prior authentication)
+const csrfExemptEndpoints = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/verify-email',
+  '/auth/resend-verification',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/refresh',
+  '/sessions/join',
+];
+
+function isStateChangingMethod(method?: string): boolean {
+  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method?.toUpperCase() || '');
+}
+
+function isCsrfExempt(endpoint: string): boolean {
+  return csrfExemptEndpoints.some(exempt => endpoint === exempt || endpoint.startsWith(exempt + '?'));
+}
+
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { skipAuth, ...fetchOptions } = options;
+  const { skipAuth, skipCsrf, ...fetchOptions } = options;
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -35,11 +97,45 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     }
   }
 
+  // Add CSRF token for state-changing requests (unless exempt)
+  if (!skipCsrf && isStateChangingMethod(fetchOptions.method) && !isCsrfExempt(endpoint)) {
+    try {
+      const token = await getCsrfToken();
+      (headers as Record<string, string>)['x-csrf-token'] = token;
+    } catch (err) {
+      console.warn('Failed to get CSRF token:', err);
+    }
+  }
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...fetchOptions,
     headers,
     credentials: 'include', // Include cookies
   });
+
+  // If CSRF token is invalid, clear it and retry once
+  if (response.status === 403 && isStateChangingMethod(fetchOptions.method)) {
+    const errorData = await response.clone().json().catch(() => ({}));
+    if (errorData.error?.toLowerCase().includes('csrf')) {
+      clearCsrfToken();
+      // Retry with fresh token
+      const token = await getCsrfToken();
+      (headers as Record<string, string>)['x-csrf-token'] = token;
+
+      const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...fetchOptions,
+        headers,
+        credentials: 'include',
+      });
+
+      if (!retryResponse.ok) {
+        const error = await retryResponse.json().catch(() => ({ error: 'Request failed' }));
+        throw new ApiError(retryResponse.status, error.error || 'Request failed');
+      }
+
+      return retryResponse.json();
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
@@ -97,8 +193,11 @@ export const authApi = {
       { method: 'POST', body: JSON.stringify(data) }
     ),
 
-  logout: () =>
-    request<{ message: string }>('/auth/logout', { method: 'POST' }),
+  logout: async () => {
+    const result = await request<{ message: string }>('/auth/logout', { method: 'POST' });
+    clearCsrfToken();
+    return result;
+  },
 
   refresh: () =>
     request<{ accessToken: string }>('/auth/refresh', { method: 'POST' }),

@@ -89,3 +89,37 @@ export function validateEmail(email: string): { valid: boolean; error?: string }
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+
+/**
+ * Password validation result
+ */
+export interface PasswordValidation {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * Validates password strength requirements:
+ * - At least 12 characters
+ * - At least one lowercase letter
+ * - At least one uppercase letter
+ * - At least one number
+ */
+export function validatePassword(password: string): PasswordValidation {
+  const errors: string[] = [];
+
+  if (password.length < 12) {
+    errors.push('Password must be at least 12 characters');
+  }
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password must contain a lowercase letter');
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain an uppercase letter');
+  }
+  if (!/[0-9]/.test(password)) {
+    errors.push('Password must contain a number');
+  }
+
+  return { valid: errors.length === 0, errors };
+}

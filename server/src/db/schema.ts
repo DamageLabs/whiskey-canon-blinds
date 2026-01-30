@@ -112,6 +112,18 @@ export const follows = sqliteTable('follows', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
+// Audit logs table (security events)
+export const auditLogs = sqliteTable('audit_logs', {
+  id: text('id').primaryKey(),
+  action: text('action').notNull(),
+  userId: text('user_id'),
+  targetUserId: text('target_user_id'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  metadata: text('metadata'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -125,3 +137,5 @@ export type Score = typeof scores.$inferSelect;
 export type NewScore = typeof scores.$inferInsert;
 export type Follow = typeof follows.$inferSelect;
 export type NewFollow = typeof follows.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
