@@ -4,3 +4,4 @@ export { Select } from './Select';
 export { Textarea } from './Textarea';
 export { Card, CardHeader, CardContent, CardFooter } from './Card';
 export { Modal } from './Modal';
+export { OfflineIndicator } from './OfflineIndicator';

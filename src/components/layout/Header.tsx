@@ -46,16 +46,28 @@ export function Header() {
             </Link>
 
             {isAuthenticated && (
-              <Link
-                to="/create"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive('/create')
-                    ? 'bg-zinc-800 text-amber-500'
-                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
-                }`}
-              >
-                Host
-              </Link>
+              <>
+                <Link
+                  to="/create"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive('/create')
+                      ? 'bg-zinc-800 text-amber-500'
+                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+                  }`}
+                >
+                  Host
+                </Link>
+                <Link
+                  to="/analytics"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive('/analytics')
+                      ? 'bg-zinc-800 text-amber-500'
+                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+                  }`}
+                >
+                  Analytics
+                </Link>
+              </>
             )}
 
             <Link

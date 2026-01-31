@@ -17,6 +17,9 @@ import scoresRoutes from './routes/scores.js';
 import participantsRoutes from './routes/participants.js';
 import adminRoutes from './routes/admin.js';
 import socialRoutes from './routes/social.js';
+import templatesRoutes from './routes/templates.js';
+import commentsRoutes from './routes/comments.js';
+import analyticsRoutes from './routes/analytics.js';
 import { logger } from './utils/logger.js';
 
 // Load environment variables
@@ -113,6 +116,9 @@ app.use('/api/scores', scoresRoutes);
 app.use('/api/participants', participantsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/templates', templatesRoutes);
+app.use('/api/comments', commentsRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Error handling
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {

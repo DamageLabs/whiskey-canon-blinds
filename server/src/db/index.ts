@@ -254,6 +254,52 @@ export function initializeDatabase() {
     // Index already exists
   }
 
+  // Session templates table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS session_templates (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      theme TEXT NOT NULL,
+      custom_theme TEXT,
+      proof_min INTEGER,
+      proof_max INTEGER,
+      max_participants INTEGER,
+      whiskeys TEXT NOT NULL,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_session_templates_user ON session_templates(user_id);
+  `);
+
+  // Comments table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS comments (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      whiskey_id TEXT NOT NULL REFERENCES whiskeys(id) ON DELETE CASCADE,
+      participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+      parent_id TEXT,
+      content TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_comments_session ON comments(session_id);
+    CREATE INDEX IF NOT EXISTS idx_comments_whiskey ON comments(whiskey_id);
+    CREATE INDEX IF NOT EXISTS idx_comments_participant ON comments(participant_id);
+    CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
+  `);
+
+  // Index for scheduled sessions
+  try {
+    sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_scheduled_at ON sessions(scheduled_at);`);
+  } catch {
+    // Index already exists
+  }
+
   logger.info('Database initialized');
 }
 

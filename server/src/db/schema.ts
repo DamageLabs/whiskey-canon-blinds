@@ -129,6 +129,34 @@ export const auditLogs = sqliteTable('audit_logs', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
+// Session templates table
+export const sessionTemplates = sqliteTable('session_templates', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  theme: text('theme').notNull(),
+  customTheme: text('custom_theme'),
+  proofMin: integer('proof_min'),
+  proofMax: integer('proof_max'),
+  maxParticipants: integer('max_participants'),
+  whiskeys: text('whiskeys').notNull(), // JSON array of whiskey configs
+  usageCount: integer('usage_count').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+// Comments table (for whiskey discussions)
+export const comments = sqliteTable('comments', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  whiskeyId: text('whiskey_id').notNull().references(() => whiskeys.id, { onDelete: 'cascade' }),
+  participantId: text('participant_id').notNull().references(() => participants.id, { onDelete: 'cascade' }),
+  parentId: text('parent_id'), // For threaded replies
+  content: text('content').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -144,3 +172,7 @@ export type Follow = typeof follows.$inferSelect;
 export type NewFollow = typeof follows.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type SessionTemplate = typeof sessionTemplates.$inferSelect;
+export type NewSessionTemplate = typeof sessionTemplates.$inferInsert;
+export type Comment = typeof comments.$inferSelect;
+export type NewComment = typeof comments.$inferInsert;

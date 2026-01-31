@@ -18,6 +18,20 @@ export interface SocketEvents {
   'participant:connected': { participantId: string };
   'participant:disconnected': { participantId: string };
   'score:locked': { participantId: string; whiskeyId: string; participantName: string };
+  'comment:add': {
+    id: string;
+    sessionId: string;
+    whiskeyId: string;
+    participantId: string;
+    parentId: string | null;
+    content: string;
+    createdAt: string;
+    updatedAt: string;
+    participantName: string;
+    isOwn: boolean;
+  };
+  'comment:update': { id: string; content: string; updatedAt: string };
+  'comment:delete': { id: string; whiskeyId: string };
 }
 
 export function connectSocket(token: string): Socket {

@@ -1,7 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Button, Card, CardHeader, CardContent } from '@/components/ui';
+import { UpcomingSessions } from '@/components/sessions';
+import { useAuthStore } from '@/store/authStore';
 
 export function HomePage() {
+  const { isAuthenticated } = useAuthStore();
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 pt-[10vh]">
       {/* Logo/Header */}
@@ -89,6 +93,12 @@ export function HomePage() {
         </Card>
       </div>
 
+      {/* Upcoming Sessions - only for authenticated users */}
+      {isAuthenticated && (
+        <div className="w-full max-w-2xl mt-12">
+          <UpcomingSessions />
+        </div>
+      )}
     </div>
   );
 }

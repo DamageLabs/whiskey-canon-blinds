@@ -261,6 +261,7 @@ export interface CreateSessionData {
   proofMin?: number;
   proofMax?: number;
   maxParticipants?: number;
+  scheduledAt?: string;
   whiskeys: Array<{
     name: string;
     distillery: string;
@@ -885,6 +886,184 @@ export const socialApi = {
 
   getShareableScores: () =>
     request<ShareableScoreResponse[]>('/scores/shareable'),
+};
+
+// Templates API
+export interface TemplateWhiskey {
+  name: string;
+  distillery: string;
+  age?: number;
+  proof: number;
+  price?: number;
+  pourSize: string;
+}
+
+export interface SessionTemplate {
+  id: string;
+  userId: string;
+  name: string;
+  theme: string;
+  customTheme?: string;
+  proofMin?: number;
+  proofMax?: number;
+  maxParticipants?: number;
+  whiskeys: TemplateWhiskey[];
+  usageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const templatesApi = {
+  getAll: () =>
+    request<SessionTemplate[]>('/templates'),
+
+  get: (templateId: string) =>
+    request<SessionTemplate>(`/templates/${templateId}`),
+
+  create: (data: Omit<SessionTemplate, 'id' | 'userId' | 'usageCount' | 'createdAt' | 'updatedAt'>) =>
+    request<SessionTemplate>('/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (templateId: string, data: Partial<Omit<SessionTemplate, 'id' | 'userId' | 'usageCount' | 'createdAt' | 'updatedAt'>>) =>
+    request<SessionTemplate>(`/templates/${templateId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (templateId: string) =>
+    request<{ message: string }>(`/templates/${templateId}`, { method: 'DELETE' }),
+
+  use: (templateId: string) =>
+    request<{ message: string }>(`/templates/${templateId}/use`, { method: 'POST' }),
+};
+
+// Comments API
+export interface Comment {
+  id: string;
+  sessionId: string;
+  whiskeyId: string;
+  participantId: string;
+  parentId?: string | null;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  participantName: string;
+  isOwn: boolean;
+}
+
+export const commentsApi = {
+  getForWhiskey: (sessionId: string, whiskeyId: string) =>
+    request<Comment[]>(`/comments/session/${sessionId}/whiskey/${whiskeyId}`),
+
+  create: (data: { sessionId: string; whiskeyId: string; content: string; parentId?: string }) =>
+    request<Comment>('/comments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (commentId: string, content: string) =>
+    request<Comment>(`/comments/${commentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+
+  delete: (commentId: string) =>
+    request<{ message: string }>(`/comments/${commentId}`, { method: 'DELETE' }),
+};
+
+// Analytics API
+export interface AnalyticsTrend {
+  date: string;
+  averageScore: number;
+  averageNose: number;
+  averagePalate: number;
+  averageFinish: number;
+  averageOverall: number;
+  count: number;
+}
+
+export interface AnalyticsSummary {
+  totalSessions: number;
+  totalWhiskeys: number;
+  averageScore: number;
+  categoryAverages: {
+    nose: number;
+    palate: number;
+    finish: number;
+    overall: number;
+  };
+}
+
+export interface AnalyticsRanking {
+  id: string;
+  whiskey: {
+    id: string;
+    name: string;
+    distillery: string;
+    age?: number;
+    proof: number;
+  };
+  score: number;
+  nose: number;
+  palate: number;
+  finish: number;
+  overall: number;
+  scoredAt: string;
+}
+
+export interface AnalyticsSession {
+  id: string;
+  name: string;
+  theme: string;
+  customTheme?: string;
+  status: string;
+  isModerator: boolean;
+  createdAt: string;
+  whiskeyCount: number;
+  participantCount: number;
+  groupAverage: number;
+  userAverage: number | null;
+  scoreDifference: number | null;
+}
+
+export interface AnalyticsDistribution {
+  distribution: Record<string, number>;
+  total: number;
+  average: number;
+}
+
+export const analyticsApi = {
+  getTrends: (days = 90) =>
+    request<{ trends: AnalyticsTrend[]; summary: AnalyticsSummary }>(`/analytics/trends?days=${days}`),
+
+  getRankings: (limit = 20) =>
+    request<{ rankings: AnalyticsRanking[] }>(`/analytics/rankings?limit=${limit}`),
+
+  getSessions: (limit = 20) =>
+    request<{ sessions: AnalyticsSession[] }>(`/analytics/sessions?limit=${limit}`),
+
+  getDistribution: () =>
+    request<AnalyticsDistribution>('/analytics/distribution'),
+};
+
+// Upcoming Sessions API
+export interface UpcomingSession {
+  id: string;
+  name: string;
+  theme: string;
+  customTheme?: string;
+  status: string;
+  scheduledAt: string;
+  isModerator: boolean;
+  participantCount: number;
+  inviteCode: string;
+}
+
+export const upcomingSessionsApi = {
+  get: () =>
+    request<UpcomingSession[]>('/sessions/upcoming'),
 };
 
 export { ApiError };
