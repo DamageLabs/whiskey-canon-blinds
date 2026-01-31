@@ -20,6 +20,7 @@ export interface AuthRequest extends Request {
   userId?: string;
   userRole?: UserRole;
   participantId?: string;
+  sessionId?: string;
 }
 
 export interface JwtPayload {
@@ -71,6 +72,7 @@ export function authenticateParticipant(req: AuthRequest, res: Response, next: N
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as ParticipantJwtPayload;
     req.participantId = decoded.participantId;
+    req.sessionId = decoded.sessionId;
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired participant token' });

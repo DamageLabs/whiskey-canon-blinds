@@ -15,6 +15,7 @@ import {
   type ScoreData,
   type SessionResults,
 } from '@/services';
+import { offlineStorage } from '@/services/offlineStorage';
 import type {
   TastingPhase,
   SessionStatus,
@@ -74,6 +75,9 @@ interface SessionState {
   // Socket connected
   isConnected: boolean;
 
+  // Offline queue
+  offlineQueueCount: number;
+
   // Actions
   createSession: (data: CreateSessionData) => Promise<{ id: string; inviteCode: string }>;
   joinSessionByCode: (inviteCode: string, displayName: string) => Promise<string>;
@@ -92,6 +96,10 @@ interface SessionState {
   // Socket management
   connectToSession: (token: string, sessionId?: string) => void;
   disconnect: () => void;
+
+  // Offline queue
+  syncOfflineQueue: () => Promise<void>;
+  updateOfflineQueueCount: () => Promise<void>;
 
   // Local state updates
   setParticipants: (participants: Participant[]) => void;
@@ -126,6 +134,7 @@ const initialState = {
   timerSeconds: 0,
   timerActive: false,
   isConnected: false,
+  offlineQueueCount: 0,
 };
 
 export const useSessionStore = create<SessionState>()(
@@ -312,6 +321,47 @@ export const useSessionStore = create<SessionState>()(
 
           set({ scores: newScores });
         } catch (error) {
+          // If offline, queue the score for later
+          if (!navigator.onLine) {
+            try {
+              await offlineStorage.queueScore({
+                sessionId: session.id,
+                whiskeyId: data.whiskeyId,
+                nose: data.nose,
+                palate: data.palate,
+                finish: data.finish,
+                overall: data.overall,
+                noseNotes: data.noseNotes,
+                palateNotes: data.palateNotes,
+                finishNotes: data.finishNotes,
+                generalNotes: data.generalNotes,
+                identityGuess: data.identityGuess,
+              });
+
+              // Update queue count
+              const count = await offlineStorage.getQueueCount();
+              set({ offlineQueueCount: count });
+
+              // Add score locally with temporary ID
+              const newScores = new Map(get().scores);
+              newScores.set(`${currentParticipant.id}-${data.whiskeyId}`, {
+                id: `offline-${Date.now()}`,
+                whiskeyId: data.whiskeyId,
+                participantId: currentParticipant.id,
+                nose: data.nose,
+                palate: data.palate,
+                finish: data.finish,
+                overall: data.overall,
+                totalScore: (data.nose + data.palate + data.finish + data.overall) / 4,
+              });
+              set({ scores: newScores });
+
+              return; // Don't throw - score is queued
+            } catch (queueError) {
+              console.error('Failed to queue offline score:', queueError);
+            }
+          }
+
           set({ error: (error as Error).message });
           throw error;
         }
@@ -454,6 +504,51 @@ export const useSessionStore = create<SessionState>()(
       disconnect: () => {
         disconnectSocket();
         set({ isConnected: false });
+      },
+
+      // Offline queue methods
+      syncOfflineQueue: async () => {
+        if (!navigator.onLine) return;
+
+        try {
+          const queuedScores = await offlineStorage.getQueuedScores();
+
+          for (const queuedScore of queuedScores) {
+            try {
+              await scoresApi.submit({
+                sessionId: queuedScore.sessionId,
+                whiskeyId: queuedScore.whiskeyId,
+                nose: queuedScore.nose,
+                palate: queuedScore.palate,
+                finish: queuedScore.finish,
+                overall: queuedScore.overall,
+                noseNotes: queuedScore.noseNotes,
+                palateNotes: queuedScore.palateNotes,
+                finishNotes: queuedScore.finishNotes,
+                generalNotes: queuedScore.generalNotes,
+                identityGuess: queuedScore.identityGuess,
+              });
+
+              await offlineStorage.removeQueuedScore(queuedScore.id);
+            } catch (error) {
+              console.error('Failed to sync queued score:', error);
+            }
+          }
+
+          const count = await offlineStorage.getQueueCount();
+          set({ offlineQueueCount: count });
+        } catch (error) {
+          console.error('Failed to sync offline queue:', error);
+        }
+      },
+
+      updateOfflineQueueCount: async () => {
+        try {
+          const count = await offlineStorage.getQueueCount();
+          set({ offlineQueueCount: count });
+        } catch (error) {
+          console.error('Failed to update offline queue count:', error);
+        }
       },
 
       // Local state updates

@@ -16,3 +16,5 @@ export { PublicProfilePage } from './PublicProfile';
 export { FollowersPage } from './Followers';
 export { FollowingPage } from './Following';
 export { TastingGuidePage } from './TastingGuide';
+export { TemplatesPage } from './Templates';
+export { AnalyticsPage } from './Analytics';

@@ -148,6 +148,22 @@ export function initializeSocket(httpServer: HttpServer): Server {
       });
     });
 
+    // Handle comment events (real-time comment updates)
+    socket.on('comment:add', (data: { sessionId: string; comment: unknown }) => {
+      if (!socket.participantId) return;
+      // Broadcast to other participants in the session
+      socket.to(data.sessionId).emit('comment:add', data.comment);
+    });
+
+    socket.on('comment:delete', (data: { sessionId: string; commentId: string; whiskeyId: string }) => {
+      if (!socket.participantId) return;
+      // Broadcast to other participants in the session
+      socket.to(data.sessionId).emit('comment:delete', {
+        id: data.commentId,
+        whiskeyId: data.whiskeyId,
+      });
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
       logger.debug(`Client disconnected: ${socket.id}`);

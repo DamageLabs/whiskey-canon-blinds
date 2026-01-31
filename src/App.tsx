@@ -18,6 +18,8 @@ import {
   FollowersPage,
   FollowingPage,
   TastingGuidePage,
+  TemplatesPage,
+  AnalyticsPage,
 } from '@/pages';
 import { Layout } from '@/components/layout';
 
@@ -50,6 +52,10 @@ function App() {
 
           {/* Guide */}
           <Route path="/guide" element={<TastingGuidePage />} />
+
+          {/* Templates & Analytics */}
+          <Route path="/templates" element={<TemplatesPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
 
           {/* Public Profiles */}
           <Route path="/user/:userId" element={<PublicProfilePage />} />

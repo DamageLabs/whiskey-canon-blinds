@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, CardContent } from '@/components/ui';
+import { CommentList } from '@/components/comments';
 import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
 import { socialApi, resultsExportApi } from '@/services/api';
@@ -17,6 +18,7 @@ export function RevealPage() {
   const [sharedScores, setSharedScores] = useState<Set<string>>(new Set());
   const [sharingScoreId, setSharingScoreId] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Close export menu when clicking outside
@@ -78,6 +80,18 @@ export function RevealPage() {
   };
 
   const winner = whiskeyResults[0];
+
+  const toggleComments = (whiskeyId: string) => {
+    setExpandedComments((prev) => {
+      const next = new Set(prev);
+      if (next.has(whiskeyId)) {
+        next.delete(whiskeyId);
+      } else {
+        next.add(whiskeyId);
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="flex-1 p-4 md:p-8">
@@ -229,7 +243,7 @@ export function RevealPage() {
                             const isShared = sharedScores.has(myScore.id);
                             const isSharing = sharingScoreId === myScore.id;
                             return (
-                              <div className="mt-4 pt-4 border-t border-zinc-700">
+                              <div className="mt-4 pt-4 border-t border-zinc-700 flex items-center gap-3">
                                 <button
                                   onClick={async () => {
                                     if (isSharing) return;
@@ -267,6 +281,29 @@ export function RevealPage() {
                               </div>
                             );
                           })()}
+
+                          {/* Comments Section Toggle */}
+                          <div className="mt-4 pt-4 border-t border-zinc-700">
+                            <button
+                              onClick={() => toggleComments(result.whiskey.id)}
+                              className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                              </svg>
+                              {expandedComments.has(result.whiskey.id) ? 'Hide Discussion' : 'Join Discussion'}
+                            </button>
+
+                            {expandedComments.has(result.whiskey.id) && sessionId && (
+                              <div className="mt-4">
+                                <CommentList
+                                  sessionId={sessionId}
+                                  whiskeyId={result.whiskey.id}
+                                  whiskeyName={result.whiskey.name}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </>
                       ) : (
                         <div className="py-4">

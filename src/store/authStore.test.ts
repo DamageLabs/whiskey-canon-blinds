@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAuthStore } from './authStore';
 
 // Mock the authApi module
@@ -41,18 +41,18 @@ describe('authStore', () => {
 
   describe('login', () => {
     it('should set loading state while logging in', async () => {
-      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test User', role: 'user' };
+      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test User', role: 'user' as const };
       vi.mocked(authApi.login).mockImplementation(async () => {
         expect(useAuthStore.getState().isLoading).toBe(true);
-        return { user: mockUser };
+        return { user: mockUser, accessToken: 'mock-token' };
       });
 
       await useAuthStore.getState().login('test@example.com', 'password123');
     });
 
     it('should set user and authentication state on successful login', async () => {
-      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test User', role: 'user' };
-      vi.mocked(authApi.login).mockResolvedValue({ user: mockUser });
+      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test User', role: 'user' as const };
+      vi.mocked(authApi.login).mockResolvedValue({ user: mockUser, accessToken: 'mock-token' });
 
       await useAuthStore.getState().login('test@example.com', 'password123');
 
@@ -65,8 +65,8 @@ describe('authStore', () => {
     });
 
     it('should set isAdmin for admin users', async () => {
-      const mockUser = { id: '1', email: 'admin@example.com', displayName: 'Admin', role: 'admin' };
-      vi.mocked(authApi.login).mockResolvedValue({ user: mockUser });
+      const mockUser = { id: '1', email: 'admin@example.com', displayName: 'Admin', role: 'admin' as const };
+      vi.mocked(authApi.login).mockResolvedValue({ user: mockUser, accessToken: 'mock-token' });
 
       await useAuthStore.getState().login('admin@example.com', 'password123');
 
@@ -88,8 +88,8 @@ describe('authStore', () => {
     });
 
     it('should call authApi.login with correct credentials', async () => {
-      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' };
-      vi.mocked(authApi.login).mockResolvedValue({ user: mockUser });
+      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' as const };
+      vi.mocked(authApi.login).mockResolvedValue({ user: mockUser, accessToken: 'mock-token' });
 
       await useAuthStore.getState().login('test@example.com', 'password123');
 
@@ -104,12 +104,12 @@ describe('authStore', () => {
     it('should clear user state on logout', async () => {
       // Set up authenticated state
       useAuthStore.setState({
-        user: { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' },
+        user: { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' as const },
         isAuthenticated: true,
         isAdmin: false,
       });
 
-      vi.mocked(authApi.logout).mockResolvedValue(undefined);
+      vi.mocked(authApi.logout).mockResolvedValue({ message: 'Logged out' });
 
       await useAuthStore.getState().logout();
 
@@ -121,7 +121,7 @@ describe('authStore', () => {
 
     it('should clear state even if logout API fails', async () => {
       useAuthStore.setState({
-        user: { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' },
+        user: { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' as const },
         isAuthenticated: true,
       });
 
@@ -142,7 +142,7 @@ describe('authStore', () => {
 
   describe('checkAuth', () => {
     it('should set loading state while checking auth', async () => {
-      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' };
+      const mockUser = { id: '1', email: 'test@example.com', displayName: 'Test', role: 'user' as const, createdAt: '2024-01-01' };
       vi.mocked(authApi.me).mockImplementation(async () => {
         expect(useAuthStore.getState().isLoading).toBe(true);
         return mockUser;
@@ -156,12 +156,13 @@ describe('authStore', () => {
         id: '1',
         email: 'test@example.com',
         displayName: 'Test User',
-        role: 'user',
+        role: 'user' as const,
         avatarUrl: null,
         bio: null,
         favoriteCategory: null,
         experienceLevel: null,
         isProfilePublic: true,
+        createdAt: '2024-01-01',
       };
       vi.mocked(authApi.me).mockResolvedValue(mockUser);
 
@@ -178,13 +179,14 @@ describe('authStore', () => {
         id: '1',
         email: 'test@example.com',
         displayName: 'Test',
-        role: 'user',
+        role: 'user' as const,
+        createdAt: '2024-01-01',
       };
 
       vi.mocked(authApi.me)
         .mockRejectedValueOnce(new Error('Unauthorized'))
         .mockResolvedValueOnce(mockUser);
-      vi.mocked(authApi.refresh).mockResolvedValue(undefined);
+      vi.mocked(authApi.refresh).mockResolvedValue({ accessToken: 'new-token' });
 
       await useAuthStore.getState().checkAuth();
 

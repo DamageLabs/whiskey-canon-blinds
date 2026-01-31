@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input, Select, Card, CardHeader, CardContent, CardFooter } from '@/components/ui';
+import { TemplateSelector } from '@/components/templates';
 import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
+import { useTemplateStore } from '@/store/templateStore';
+import type { SessionTemplate } from '@/services/api';
 
 // Helper to handle empty number inputs (valueAsNumber returns NaN for empty)
 const optionalNumber = z.preprocess(
@@ -33,6 +36,7 @@ const sessionSchema = z.object({
     (val) => (val === '' || Number.isNaN(val) ? undefined : val),
     z.number().min(2, 'Minimum 2 participants').max(50, 'Maximum 50 participants').optional()
   ),
+  scheduledAt: z.string().optional(),
   whiskeys: z.array(whiskeySchema).min(1, 'Add at least one whiskey').max(6, 'Maximum 6 whiskeys'),
 });
 
@@ -56,15 +60,21 @@ const POUR_SIZE_OPTIONS = [
 
 export function CreateSessionPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { createSession, isLoading, error } = useSessionStore();
   const { isAuthenticated } = useAuthStore();
+  const { fetchTemplate, useTemplate } = useTemplateStore();
   const [step, setStep] = useState<'details' | 'flight'>('details');
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
 
   const {
     register,
     control,
     handleSubmit,
     watch,
+    reset,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(sessionSchema),
@@ -72,11 +82,61 @@ export function CreateSessionPage() {
       name: '',
       hostName: '',
       theme: 'bourbon',
+      scheduledAt: '',
       whiskeys: [
         { name: '', distillery: '', age: undefined, proof: 90, price: undefined, pourSize: '0.5oz' as const },
       ],
     },
   });
+
+  // Load template from URL parameter
+  useEffect(() => {
+    const templateId = searchParams.get('template');
+    if (templateId) {
+      fetchTemplate(templateId).then((template) => {
+        applyTemplate(template);
+      }).catch((err) => {
+        console.error('Failed to load template:', err);
+      });
+    }
+  }, [searchParams, fetchTemplate]);
+
+  const applyTemplate = (template: SessionTemplate | null) => {
+    if (!template) {
+      reset({
+        name: '',
+        hostName: '',
+        theme: 'bourbon',
+        scheduledAt: '',
+        whiskeys: [
+          { name: '', distillery: '', age: undefined, proof: 90, price: undefined, pourSize: '0.5oz' as const },
+        ],
+      });
+      return;
+    }
+
+    // Mark template as used
+    useTemplate(template.id).catch(() => {});
+
+    // Apply template values
+    setValue('theme', template.theme);
+    if (template.customTheme) setValue('customTheme', template.customTheme);
+    if (template.proofMin) setValue('proofMin', template.proofMin);
+    if (template.proofMax) setValue('proofMax', template.proofMax);
+    if (template.maxParticipants) setValue('maxParticipants', template.maxParticipants);
+
+    // Apply whiskeys
+    const whiskeysWithDefaults = template.whiskeys.map((w) => ({
+      name: w.name || '',
+      distillery: w.distillery || '',
+      age: w.age,
+      proof: w.proof || 90,
+      price: w.price,
+      pourSize: (w.pourSize || '0.5oz') as '0.5oz' | '1oz',
+    }));
+
+    setValue('whiskeys', whiskeysWithDefaults);
+  };
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -87,6 +147,27 @@ export function CreateSessionPage() {
 
   const onSubmit = async (data: SessionFormData) => {
     try {
+      // Save as template if requested
+      if (saveAsTemplate && templateName.trim()) {
+        const { templatesApi } = await import('@/services/api');
+        await templatesApi.create({
+          name: templateName.trim(),
+          theme: data.theme,
+          customTheme: data.customTheme,
+          proofMin: data.proofMin,
+          proofMax: data.proofMax,
+          maxParticipants: data.maxParticipants,
+          whiskeys: data.whiskeys.map((w) => ({
+            name: w.name,
+            distillery: w.distillery,
+            age: w.age,
+            proof: w.proof,
+            price: w.price,
+            pourSize: w.pourSize,
+          })),
+        });
+      }
+
       const result = await createSession({
         name: data.name,
         hostName: data.hostName,
@@ -95,6 +176,7 @@ export function CreateSessionPage() {
         proofMin: data.proofMin,
         proofMax: data.proofMax,
         maxParticipants: data.maxParticipants,
+        scheduledAt: data.scheduledAt || undefined,
         whiskeys: data.whiskeys.map((w) => ({
           name: w.name,
           distillery: w.distillery,
@@ -197,6 +279,11 @@ export function CreateSessionPage() {
                 description="Name your tasting and select a theme"
               />
               <CardContent className="space-y-4">
+                {/* Template Selector */}
+                <TemplateSelector onSelect={applyTemplate} />
+
+                <div className="border-t border-zinc-700 pt-4" />
+
                 <Input
                   label="Session Name"
                   placeholder="e.g., Bourbon Showdown - January 2026"
@@ -248,6 +335,13 @@ export function CreateSessionPage() {
                   hint="Limit how many people can join (2-50)"
                   error={errors.maxParticipants?.message}
                   {...register('maxParticipants', { valueAsNumber: true })}
+                />
+
+                <Input
+                  label="Schedule For (Optional)"
+                  type="datetime-local"
+                  hint="Leave empty to start immediately, or set a future date/time"
+                  {...register('scheduledAt')}
                 />
               </CardContent>
               <CardFooter className="flex justify-end">
@@ -347,6 +441,29 @@ export function CreateSessionPage() {
                     </Button>
                   )}
                 </CardContent>
+              </Card>
+
+              {/* Save as Template */}
+              <Card variant="outlined" className="p-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={saveAsTemplate}
+                    onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="text-zinc-300">Save as template for future use</span>
+                </label>
+                {saveAsTemplate && (
+                  <div className="mt-3">
+                    <Input
+                      label="Template Name"
+                      placeholder="e.g., My Bourbon Flight"
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                    />
+                  </div>
+                )}
               </Card>
 
               <div className="flex gap-4">

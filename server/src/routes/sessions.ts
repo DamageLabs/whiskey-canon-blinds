@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { randomInt } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { db, schema } from '../db/index.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gt, asc, desc, or } from 'drizzle-orm';
 import {
   AuthRequest,
   authenticateUser,
@@ -32,7 +32,7 @@ function generateInviteCode(): string {
 // Create a new session (requires authenticated user)
 router.post('/', authenticateUser, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, hostName, theme, customTheme, proofMin, proofMax, maxParticipants, whiskeys } = req.body;
+    const { name, hostName, theme, customTheme, proofMin, proofMax, maxParticipants, whiskeys, scheduledAt } = req.body;
 
     if (!name || !theme) {
       return res.status(400).json({ error: 'Name and theme are required' });
@@ -93,6 +93,21 @@ router.post('/', authenticateUser, async (req: AuthRequest, res: Response) => {
     const inviteCode = generateInviteCode();
     const now = new Date();
 
+    // Parse scheduledAt or default to now
+    let sessionScheduledAt = now;
+    let initialStatus = 'waiting';
+
+    if (scheduledAt) {
+      const parsedDate = new Date(scheduledAt);
+      if (!isNaN(parsedDate.getTime())) {
+        sessionScheduledAt = parsedDate;
+        // If scheduled for the future, set status to 'scheduled'
+        if (parsedDate > now) {
+          initialStatus = 'scheduled';
+        }
+      }
+    }
+
     // Create session
     await db.insert(schema.sessions).values({
       id: sessionId,
@@ -101,8 +116,8 @@ router.post('/', authenticateUser, async (req: AuthRequest, res: Response) => {
       customTheme,
       proofMin,
       proofMax,
-      scheduledAt: now,
-      status: 'waiting',
+      scheduledAt: sessionScheduledAt,
+      status: initialStatus,
       moderatorId: req.userId!,
       currentWhiskeyIndex: 0,
       currentPhase: 'pour',
@@ -744,6 +759,78 @@ router.get('/', authenticateUser, async (req: AuthRequest, res: Response) => {
   } catch (error) {
     logger.error('Get sessions error:', error);
     return res.status(500).json({ error: 'Failed to get sessions' });
+  }
+});
+
+// Get upcoming scheduled sessions for the current user
+router.get('/upcoming', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const now = new Date();
+
+    // Get upcoming sessions where user is moderator
+    const moderatedSessions = await db.query.sessions.findMany({
+      where: and(
+        eq(schema.sessions.moderatorId, req.userId!),
+        gt(schema.sessions.scheduledAt, now),
+        or(
+          eq(schema.sessions.status, 'scheduled'),
+          eq(schema.sessions.status, 'draft'),
+          eq(schema.sessions.status, 'waiting')
+        )
+      ),
+      orderBy: [asc(schema.sessions.scheduledAt)],
+    });
+
+    // Get upcoming sessions where user is participant
+    const participations = await db.query.participants.findMany({
+      where: eq(schema.participants.userId, req.userId!),
+    });
+
+    const participantSessionIds = participations.map((p) => p.sessionId);
+
+    // Filter participated sessions that are upcoming
+    const participatedSessions = participantSessionIds.length > 0
+      ? await db.query.sessions.findMany({
+          where: and(
+            gt(schema.sessions.scheduledAt, now),
+            or(
+              eq(schema.sessions.status, 'scheduled'),
+              eq(schema.sessions.status, 'draft'),
+              eq(schema.sessions.status, 'waiting')
+            )
+          ),
+          orderBy: [asc(schema.sessions.scheduledAt)],
+        })
+      : [];
+
+    // Filter to only include sessions user is participating in
+    const filteredParticipated = participatedSessions.filter(
+      (s) => participantSessionIds.includes(s.id) && s.moderatorId !== req.userId
+    );
+
+    // Combine and sort by scheduled date
+    const allUpcoming = [...moderatedSessions, ...filteredParticipated]
+      .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+
+    // Add moderator info and participant count
+    const sessionsWithDetails = await Promise.all(
+      allUpcoming.map(async (session) => {
+        const participants = await db.query.participants.findMany({
+          where: eq(schema.participants.sessionId, session.id),
+        });
+
+        return {
+          ...session,
+          isModerator: session.moderatorId === req.userId,
+          participantCount: participants.length,
+        };
+      })
+    );
+
+    return res.json(sessionsWithDetails);
+  } catch (error) {
+    logger.error('Get upcoming sessions error:', error);
+    return res.status(500).json({ error: 'Failed to get upcoming sessions' });
   }
 });
 
