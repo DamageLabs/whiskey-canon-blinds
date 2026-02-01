@@ -8,6 +8,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+#### High Priority Features
+- **Session Templates** - Save and reuse session configurations
+  - Create templates from existing sessions
+  - Apply templates when creating new sessions
+  - Manage templates on dedicated Templates page
+- **Real-time Comments** - Live discussion during tasting sessions
+  - Per-whiskey comment threads
+  - Real-time updates via WebSocket
+  - Comments hidden until reveal (anti-anchoring)
+- **Analytics Dashboard** - Personal scoring insights
+  - Score trends over time with interactive charts
+  - Category breakdown (nose, palate, finish, overall)
+  - Score distribution visualization
+  - Session history with group comparison
+- **Upcoming Sessions** - View and join upcoming sessions from home page
+- **PWA/Offline Support** - Progressive web app with offline capabilities
+  - Service worker for caching
+  - Offline queue for actions
+  - Install prompt on supported devices
+
+#### Medium Priority Features
+- **Leaderboards & Rankings** - Cross-session competition
+  - Global rankings with time period filters (all-time, monthly, weekly)
+  - Personal rank tracking
+  - Points-based system
+- **Tasting Notes Library** - Personal notes collection
+  - Import notes from session scores
+  - Search and filter by whiskey, category, tags
+  - Public/private visibility toggle
+- **Push Notifications** - Web push for session events
+  - Configurable notification preferences
+  - Session start, invite, and achievement alerts
+- **Direct Messaging** - Private user-to-user messaging
+  - Conversation threads
+  - Unread count badge in header
+  - Real-time message delivery
+- **Enhanced Achievements** - Expanded badge system
+  - More achievement categories (social, streaks, notes)
+  - Achievement points and progress tracking
+  - Dedicated Achievements page
+
+#### Session Enhancements
+- **PDF Export** - Download session results as formatted PDF
+  - Includes session info, winner, results table, statistics
+- **Session Duplicate** - Copy session settings to new draft
+  - Copies name, theme, whiskeys (not participants/scores)
+  - Creates fresh invite code
+- **Email Invites** - Send session invitations via email
+  - Branded email template with join link
+  - Uses Resend email service
 - Max participants setting in session creation
   - Optional field to limit session capacity (2-50 participants)
   - Backend enforcement rejects joins when session is full
