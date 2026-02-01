@@ -82,14 +82,30 @@ export function ProfilePage() {
   const [isProfilePublic, setIsProfilePublic] = useState(user?.isProfilePublic ?? true);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
   const [isExporting, setIsExporting] = useState<'all' | 'csv' | 'pdf' | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch shareable scores on mount
+  // Fetch CSRF token and shareable scores on mount
   useEffect(() => {
     if (isAuthenticated) {
       fetchShareableScores();
+      fetchCsrfToken();
     }
   }, [isAuthenticated, fetchShareableScores]);
+
+  const fetchCsrfToken = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/csrf-token`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCsrfToken(data.csrfToken);
+      }
+    } catch (err) {
+      console.error('Failed to fetch CSRF token:', err);
+    }
+  };
 
   // Sync isProfilePublic with user state
   useEffect(() => {
@@ -131,6 +147,7 @@ export function ProfilePage() {
     // Authentication is handled via httpOnly cookies
     return {
       'Content-Type': 'application/json',
+      ...(csrfToken && { 'x-csrf-token': csrfToken }),
     };
   };
 
@@ -166,6 +183,9 @@ export function ProfilePage() {
       const res = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
         method: 'POST',
         credentials: 'include', // Send httpOnly cookies for authentication
+        headers: {
+          ...(csrfToken && { 'x-csrf-token': csrfToken }),
+        },
         body: formData,
       });
 
@@ -199,6 +219,9 @@ export function ProfilePage() {
       const res = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
         method: 'DELETE',
         credentials: 'include', // Send httpOnly cookies for authentication
+        headers: {
+          ...(csrfToken && { 'x-csrf-token': csrfToken }),
+        },
       });
 
       const result = await res.json();
