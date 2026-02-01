@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
 
 // User roles
 export type UserRole = 'user' | 'admin';
@@ -51,7 +51,10 @@ export const sessions = sqliteTable('sessions', {
   maxParticipants: integer('max_participants'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-});
+}, (table) => [
+  index('sessions_moderator_id_idx').on(table.moderatorId),
+  index('sessions_status_idx').on(table.status),
+]);
 
 // Whiskeys table
 export const whiskeys = sqliteTable('whiskeys', {
@@ -78,7 +81,10 @@ export const participants = sqliteTable('participants', {
   status: text('status').notNull().default('waiting'), // waiting, tasting, completed
   isReady: integer('is_ready', { mode: 'boolean' }).notNull().default(false),
   currentWhiskeyIndex: integer('current_whiskey_index').notNull().default(0),
-});
+}, (table) => [
+  index('participants_session_id_idx').on(table.sessionId),
+  index('participants_user_id_idx').on(table.userId),
+]);
 
 // Scores table
 export const scores = sqliteTable('scores', {
@@ -98,7 +104,11 @@ export const scores = sqliteTable('scores', {
   identityGuess: text('identity_guess'),
   isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false), // Share to public profile
   lockedAt: integer('locked_at', { mode: 'timestamp' }).notNull(),
-});
+}, (table) => [
+  index('scores_session_id_idx').on(table.sessionId),
+  index('scores_participant_id_idx').on(table.participantId),
+  index('scores_whiskey_id_idx').on(table.whiskeyId),
+]);
 
 // Refresh tokens table
 export const refreshTokens = sqliteTable('refresh_tokens', {
@@ -115,7 +125,10 @@ export const follows = sqliteTable('follows', {
   followerId: text('follower_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   followingId: text('following_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
+}, (table) => [
+  index('follows_follower_id_idx').on(table.followerId),
+  index('follows_following_id_idx').on(table.followingId),
+]);
 
 // Audit logs table (security events)
 export const auditLogs = sqliteTable('audit_logs', {
@@ -244,12 +257,15 @@ export const messages = sqliteTable('messages', {
   content: text('content').notNull(),
   readAt: integer('read_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
+}, (table) => [
+  index('messages_conversation_id_idx').on(table.conversationId),
+  index('messages_sender_id_idx').on(table.senderId),
+]);
 
 // User achievements table
 export const userAchievements = sqliteTable('user_achievements', {
   id: text('id').primaryKey(),
-  useri: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   achievementId: text('achievement_id').notNull(),
   earnedAt: integer('earned_at', { mode: 'timestamp' }).notNull(),
   notified: integer('notified', { mode: 'boolean' }).notNull().default(false),
