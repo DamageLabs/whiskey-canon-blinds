@@ -12,13 +12,14 @@ export function VerifyEmailPage() {
   const email = location.state?.email || '';
   const devCode = location.state?.devCode;
 
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState(['', '', '', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [newDevCode, setNewDevCode] = useState<string | null>(null);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const CODE_LENGTH = 8;
 
   // Redirect if no email, or auto-send verification if coming from login (no devCode means no recent registration)
   useEffect(() => {
@@ -42,14 +43,15 @@ export function VerifyEmailPage() {
   }, [resendCooldown]);
 
   const handleInputChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
+    // Accept alphanumeric only
+    if (!/^[A-Za-z0-9]*$/.test(value)) return;
 
     const newCode = [...code];
-    newCode[index] = value.slice(-1);
+    newCode[index] = value.slice(-1).toUpperCase();
     setCode(newCode);
 
     // Auto-focus next input
-    if (value && index < 5) {
+    if (value && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -62,21 +64,21 @@ export function VerifyEmailPage() {
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasted = e.clipboardData.getData('text').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, CODE_LENGTH);
     const newCode = [...code];
     for (let i = 0; i < pasted.length; i++) {
       newCode[i] = pasted[i];
     }
     setCode(newCode);
-    inputRefs.current[Math.min(pasted.length, 5)]?.focus();
+    inputRefs.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const fullCode = code.join('');
 
-    if (fullCode.length !== 6) {
-      setError('Please enter all 6 digits');
+    if (fullCode.length !== CODE_LENGTH) {
+      setError('Please enter all 8 characters');
       return;
     }
 
@@ -131,7 +133,7 @@ export function VerifyEmailPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-zinc-100">Verify Your Email</h1>
           <p className="text-zinc-400 mt-2">
-            We sent a 6-digit code to <span className="text-amber-500">{email}</span>
+            We sent an 8-character code to <span className="text-amber-500">{email}</span>
           </p>
         </div>
 
@@ -147,19 +149,19 @@ export function VerifyEmailPage() {
                 </div>
               )}
 
-              {/* 6-digit code input */}
-              <div className="flex justify-center gap-2" onPaste={handlePaste}>
-                {code.map((digit, index) => (
+              {/* 8-character code input */}
+              <div className="flex justify-center gap-1 sm:gap-2" onPaste={handlePaste}>
+                {code.map((char, index) => (
                   <input
                     key={index}
                     ref={(el) => { inputRefs.current[index] = el; }}
                     type="text"
-                    inputMode="numeric"
+                    inputMode="text"
                     maxLength={1}
-                    value={digit}
+                    value={char}
                     onChange={(e) => handleInputChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(index, e)}
-                    className="w-12 h-14 text-center text-2xl font-bold bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                    className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none uppercase"
                     autoFocus={index === 0}
                   />
                 ))}
