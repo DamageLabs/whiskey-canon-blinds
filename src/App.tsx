@@ -20,6 +20,11 @@ import {
   TastingGuidePage,
   TemplatesPage,
   AnalyticsPage,
+  LeaderboardsPage,
+  NotesLibraryPage,
+  MessagesPage,
+  ConversationPage,
+  AchievementsPage,
 } from '@/pages';
 import { Layout } from '@/components/layout';
 
@@ -56,6 +61,13 @@ function App() {
           {/* Templates & Analytics */}
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+
+          {/* New Features */}
+          <Route path="/leaderboards" element={<LeaderboardsPage />} />
+          <Route path="/notes" element={<NotesLibraryPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/messages/:conversationId" element={<ConversationPage />} />
+          <Route path="/achievements" element={<AchievementsPage />} />
 
           {/* Public Profiles */}
           <Route path="/user/:userId" element={<PublicProfilePage />} />

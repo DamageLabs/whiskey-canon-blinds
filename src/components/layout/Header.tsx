@@ -1,13 +1,26 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { useMessagingStore } from '@/store/messagingStore';
 
 const SERVER_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
 
 export function Header() {
   const location = useLocation();
   const { isAuthenticated, isAdmin, user } = useAuthStore();
+  const { unreadCount, fetchUnreadCount } = useMessagingStore();
 
   const isActive = (path: string) => location.pathname === path;
+  const isActivePath = (path: string) => location.pathname.startsWith(path);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUnreadCount();
+      // Poll for unread count every minute
+      const interval = setInterval(fetchUnreadCount, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, fetchUnreadCount]);
 
   return (
     <header className="bg-zinc-900 border-b border-zinc-800">
@@ -58,8 +71,18 @@ export function Header() {
                   Host
                 </Link>
                 <Link
+                  to="/notes"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hidden sm:inline ${
+                    isActive('/notes')
+                      ? 'bg-zinc-800 text-amber-500'
+                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+                  }`}
+                >
+                  Notes
+                </Link>
+                <Link
                   to="/analytics"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hidden md:inline ${
                     isActive('/analytics')
                       ? 'bg-zinc-800 text-amber-500'
                       : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
@@ -69,6 +92,17 @@ export function Header() {
                 </Link>
               </>
             )}
+
+            <Link
+              to="/leaderboards"
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hidden sm:inline ${
+                isActive('/leaderboards')
+                  ? 'bg-zinc-800 text-amber-500'
+                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+              }`}
+            >
+              Rankings
+            </Link>
 
             <Link
               to="/join"
@@ -98,6 +132,28 @@ export function Header() {
 
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
+                {/* Messages Icon */}
+                <Link
+                  to="/messages"
+                  className={`relative px-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActivePath('/messages')
+                      ? 'bg-zinc-800 text-amber-500'
+                      : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+                  }`}
+                  title="Messages"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+                      <span className="text-xs font-bold text-zinc-900">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    </span>
+                  )}
+                </Link>
+
                 <Link
                   to="/profile"
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${

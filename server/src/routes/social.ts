@@ -5,6 +5,8 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { AuthRequest, authenticateUser, getJwtSecret } from '../middleware/auth.js';
 import { statsLimiter } from '../middleware/rateLimit.js';
 import { logger } from '../utils/logger.js';
+import { notifyNewFollower } from '../services/pushService.js';
+import { checkAndAwardAchievements } from './achievements.js';
 
 const router = Router();
 
@@ -49,6 +51,19 @@ router.post('/follow/:userId', authenticateUser, async (req: AuthRequest, res: R
       followingId,
       createdAt: now,
     });
+
+    // Get follower's name for notification
+    const follower = await db.query.users.findFirst({
+      where: eq(schema.users.id, followerId),
+    });
+
+    // Send push notification to the user being followed
+    notifyNewFollower(followingId, follower?.displayName || 'Someone', followerId)
+      .catch(err => logger.error('Failed to send new follower notification:', err));
+
+    // Check achievements for the user being followed (they got a new follower)
+    checkAndAwardAchievements(followingId)
+      .catch(err => logger.error('Failed to check achievements:', err));
 
     return res.status(201).json({ message: 'Successfully followed user' });
   } catch (error) {

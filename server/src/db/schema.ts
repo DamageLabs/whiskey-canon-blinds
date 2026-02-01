@@ -157,6 +157,119 @@ export const comments = sqliteTable('comments', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
 
+// Leaderboard period types
+export type LeaderboardPeriod = 'all_time' | 'monthly' | 'weekly';
+
+// Leaderboard entries table
+export const leaderboardEntries = sqliteTable('leaderboard_entries', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  period: text('period').notNull(), // 'all_time' | 'monthly' | 'weekly'
+  periodStart: integer('period_start', { mode: 'timestamp' }).notNull(), // Start date of the period
+  totalScore: real('total_score').notNull().default(0),
+  sessionsCount: integer('sessions_count').notNull().default(0),
+  whiskeysRated: integer('whiskeys_rated').notNull().default(0),
+  averageScore: real('average_score').notNull().default(0),
+  ranking: integer('ranking').notNull().default(0),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+// Tasting notes library table
+export const tastingNotesLibrary = sqliteTable('tasting_notes_library', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  whiskeyName: text('whiskey_name').notNull(),
+  distillery: text('distillery'),
+  category: text('category'), // bourbon, rye, scotch, etc.
+  age: integer('age'),
+  proof: real('proof'),
+  noseNotes: text('nose_notes'),
+  palateNotes: text('palate_notes'),
+  finishNotes: text('finish_notes'),
+  generalNotes: text('general_notes'),
+  rating: real('rating'),
+  sourceScoreId: text('source_score_id').references(() => scores.id, { onDelete: 'set null' }),
+  sourceSessionId: text('source_session_id').references(() => sessions.id, { onDelete: 'set null' }),
+  isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
+  tags: text('tags'), // JSON array of tags
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+// Tasting note tags table
+export const tastingNoteTags = sqliteTable('tasting_note_tags', {
+  id: text('id').primaryKey(),
+  noteId: text('note_id').notNull().references(() => tastingNotesLibrary.id, { onDelete: 'cascade' }),
+  tag: text('tag').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+// Push subscriptions table
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull().unique(),
+  keysP256dh: text('keys_p256dh').notNull(),
+  keysAuth: text('keys_auth').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
+});
+
+// Notification preferences table
+export const notificationPreferences = sqliteTable('notification_preferences', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
+  sessionInvites: integer('session_invites', { mode: 'boolean' }).notNull().default(true),
+  sessionStarting: integer('session_starting', { mode: 'boolean' }).notNull().default(true),
+  sessionReveal: integer('session_reveal', { mode: 'boolean' }).notNull().default(true),
+  newFollowers: integer('new_followers', { mode: 'boolean' }).notNull().default(true),
+  achievements: integer('achievements', { mode: 'boolean' }).notNull().default(true),
+  directMessages: integer('direct_messages', { mode: 'boolean' }).notNull().default(true),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+// Conversations table
+export const conversations = sqliteTable('conversations', {
+  id: text('id').primaryKey(),
+  participantIds: text('participant_ids').notNull(), // JSON array of user IDs (sorted)
+  lastMessageAt: integer('last_message_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+// Messages table
+export const messages = sqliteTable('messages', {
+  id: text('id').primaryKey(),
+  conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  senderId: text('sender_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  readAt: integer('read_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
+// User achievements table
+export const userAchievements = sqliteTable('user_achievements', {
+  id: text('id').primaryKey(),
+  useri: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  achievementId: text('achievement_id').notNull(),
+  earnedAt: integer('earned_at', { mode: 'timestamp' }).notNull(),
+  notified: integer('notified', { mode: 'boolean' }).notNull().default(false),
+});
+
+// Achievement definitions table
+export const achievementDefinitions = sqliteTable('achievement_definitions', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  icon: text('icon').notNull(),
+  category: text('category').notNull(), // social, streaks, notes, identity, tasting
+  criteriaType: text('criteria_type').notNull(), // sessions_count, whiskeys_rated, followers, etc.
+  criteriaTarget: integer('criteria_target').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  rarity: text('rarity').notNull().default('common'), // common, uncommon, rare, epic, legendary
+  points: integer('points').notNull().default(10),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -176,3 +289,21 @@ export type SessionTemplate = typeof sessionTemplates.$inferSelect;
 export type NewSessionTemplate = typeof sessionTemplates.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
+export type LeaderboardEntry = typeof leaderboardEntries.$inferSelect;
+export type NewLeaderboardEntry = typeof leaderboardEntries.$inferInsert;
+export type TastingNoteLibrary = typeof tastingNotesLibrary.$inferSelect;
+export type NewTastingNoteLibrary = typeof tastingNotesLibrary.$inferInsert;
+export type TastingNoteTag = typeof tastingNoteTags.$inferSelect;
+export type NewTastingNoteTag = typeof tastingNoteTags.$inferInsert;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type NewPushSubscription = typeof pushSubscriptions.$inferInsert;
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;
+export type NewNotificationPreference = typeof notificationPreferences.$inferInsert;
+export type Conversation = typeof conversations.$inferSelect;
+export type NewConversation = typeof conversations.$inferInsert;
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;
+export type UserAchievement = typeof userAchievements.$inferSelect;
+export type NewUserAchievement = typeof userAchievements.$inferInsert;
+export type AchievementDefinition = typeof achievementDefinitions.$inferSelect;
+export type NewAchievementDefinition = typeof achievementDefinitions.$inferInsert;

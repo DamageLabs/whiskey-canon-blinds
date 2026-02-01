@@ -300,6 +300,211 @@ export function initializeDatabase() {
     // Index already exists
   }
 
+  // Leaderboard entries table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS leaderboard_entries (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      period TEXT NOT NULL,
+      period_start INTEGER NOT NULL,
+      total_score REAL NOT NULL DEFAULT 0,
+      sessions_count INTEGER NOT NULL DEFAULT 0,
+      whiskeys_rated INTEGER NOT NULL DEFAULT 0,
+      average_score REAL NOT NULL DEFAULT 0,
+      ranking INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(user_id, period, period_start)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_leaderboard_period ON leaderboard_entries(period);
+    CREATE INDEX IF NOT EXISTS idx_leaderboard_ranking ON leaderboard_entries(ranking);
+    CREATE INDEX IF NOT EXISTS idx_leaderboard_user_period ON leaderboard_entries(user_id, period);
+  `);
+
+  // Tasting notes library table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS tasting_notes_library (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      whiskey_name TEXT NOT NULL,
+      distillery TEXT,
+      category TEXT,
+      age INTEGER,
+      proof REAL,
+      nose_notes TEXT,
+      palate_notes TEXT,
+      finish_notes TEXT,
+      general_notes TEXT,
+      rating REAL,
+      source_score_id TEXT REFERENCES scores(id) ON DELETE SET NULL,
+      source_session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+      is_public INTEGER NOT NULL DEFAULT 0,
+      tags TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notes_user ON tasting_notes_library(user_id);
+    CREATE INDEX IF NOT EXISTS idx_notes_public ON tasting_notes_library(is_public);
+    CREATE INDEX IF NOT EXISTS idx_notes_whiskey ON tasting_notes_library(whiskey_name);
+    CREATE INDEX IF NOT EXISTS idx_notes_category ON tasting_notes_library(category);
+  `);
+
+  // Tasting note tags table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS tasting_note_tags (
+      id TEXT PRIMARY KEY,
+      note_id TEXT NOT NULL REFERENCES tasting_notes_library(id) ON DELETE CASCADE,
+      tag TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tags_note ON tasting_note_tags(note_id);
+    CREATE INDEX IF NOT EXISTS idx_tags_tag ON tasting_note_tags(tag);
+  `);
+
+  // Push subscriptions table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      keys_p256dh TEXT NOT NULL,
+      keys_auth TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+  `);
+
+  // Notification preferences table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      session_invites INTEGER NOT NULL DEFAULT 1,
+      session_starting INTEGER NOT NULL DEFAULT 1,
+      session_reveal INTEGER NOT NULL DEFAULT 1,
+      new_followers INTEGER NOT NULL DEFAULT 1,
+      achievements INTEGER NOT NULL DEFAULT 1,
+      direct_messages INTEGER NOT NULL DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+
+  // Conversations table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      participant_ids TEXT NOT NULL,
+      last_message_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_conversations_participants ON conversations(participant_ids);
+    CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations(last_message_at);
+  `);
+
+  // Messages table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      read_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(read_at);
+  `);
+
+  // User achievements table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS user_achievements (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      achievement_id TEXT NOT NULL,
+      earned_at INTEGER NOT NULL,
+      notified INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(user_id, achievement_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);
+  `);
+
+  // Achievement definitions table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS achievement_definitions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      icon TEXT NOT NULL,
+      category TEXT NOT NULL,
+      criteria_type TEXT NOT NULL,
+      criteria_target INTEGER NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      rarity TEXT NOT NULL DEFAULT 'common',
+      points INTEGER NOT NULL DEFAULT 10,
+      created_at INTEGER NOT NULL
+    );
+  `);
+
+  // Add achievement-related columns to users table
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN achievement_points INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN current_streak INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN longest_streak INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN last_session_date INTEGER;`);
+  } catch {
+    // Column already exists
+  }
+
+  // Seed initial achievement definitions if table is empty
+  const achievementCount = sqlite.prepare('SELECT COUNT(*) as count FROM achievement_definitions').get() as { count: number };
+  if (achievementCount.count === 0) {
+    const now = Date.now();
+    sqlite.exec(`
+      INSERT INTO achievement_definitions (id, name, description, icon, category, criteria_type, criteria_target, rarity, points, created_at) VALUES
+        ('first_taste', 'First Taste', 'Complete your first tasting session', 'glass-whiskey', 'tasting', 'sessions_count', 1, 'common', 10, ${now}),
+        ('five_sessions', 'Regular', 'Complete 5 tasting sessions', 'calendar-check', 'tasting', 'sessions_count', 5, 'common', 25, ${now}),
+        ('ten_sessions', 'Dedicated', 'Complete 10 tasting sessions', 'award', 'tasting', 'sessions_count', 10, 'uncommon', 50, ${now}),
+        ('twenty_five_sessions', 'Connoisseur', 'Complete 25 tasting sessions', 'crown', 'tasting', 'sessions_count', 25, 'rare', 100, ${now}),
+        ('fifty_sessions', 'Expert', 'Complete 50 tasting sessions', 'star', 'tasting', 'sessions_count', 50, 'epic', 200, ${now}),
+        ('hundred_sessions', 'Master', 'Complete 100 tasting sessions', 'gem', 'tasting', 'sessions_count', 100, 'legendary', 500, ${now}),
+        ('ten_whiskeys', 'Explorer', 'Rate 10 different whiskeys', 'compass', 'tasting', 'whiskeys_rated', 10, 'common', 25, ${now}),
+        ('fifty_whiskeys', 'Adventurer', 'Rate 50 different whiskeys', 'map', 'tasting', 'whiskeys_rated', 50, 'uncommon', 75, ${now}),
+        ('hundred_whiskeys', 'Globetrotter', 'Rate 100 different whiskeys', 'globe', 'tasting', 'whiskeys_rated', 100, 'rare', 150, ${now}),
+        ('first_follower', 'Social Butterfly', 'Get your first follower', 'user-plus', 'social', 'followers', 1, 'common', 15, ${now}),
+        ('ten_followers', 'Popular', 'Get 10 followers', 'users', 'social', 'followers', 10, 'uncommon', 50, ${now}),
+        ('fifty_followers', 'Influencer', 'Get 50 followers', 'trending-up', 'social', 'followers', 50, 'rare', 150, ${now}),
+        ('weekly_warrior', 'Weekly Warrior', 'Maintain a 7-day tasting streak', 'fire', 'streaks', 'streak_days', 7, 'uncommon', 50, ${now}),
+        ('monthly_dedication', 'Monthly Dedication', 'Maintain a 30-day tasting streak', 'flame', 'streaks', 'streak_days', 30, 'rare', 150, ${now}),
+        ('note_taker', 'Note Taker', 'Create your first public tasting note', 'edit', 'notes', 'public_notes', 1, 'common', 15, ${now}),
+        ('prolific_writer', 'Prolific Writer', 'Create 10 public tasting notes', 'book-open', 'notes', 'public_notes', 10, 'uncommon', 50, ${now}),
+        ('lucky_guess', 'Lucky Guess', 'Correctly identify 1 whiskey', 'target', 'identity', 'correct_guesses', 1, 'common', 20, ${now}),
+        ('sharp_eye', 'Sharp Eye', 'Correctly identify 5 whiskeys', 'eye', 'identity', 'correct_guesses', 5, 'uncommon', 75, ${now}),
+        ('eagle_eye', 'Eagle Eye', 'Correctly identify 10 whiskeys', 'crosshairs', 'identity', 'correct_guesses', 10, 'rare', 150, ${now});
+    `);
+  }
+
   logger.info('Database initialized');
 }
 

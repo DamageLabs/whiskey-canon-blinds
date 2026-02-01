@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent, Button } from '@/components/ui';
 import { FollowButton, ProfileStats, TastingNoteCard, TastingStats, AchievementsGrid } from '@/components/social';
+import { StartConversationButton } from '@/components/messaging';
 import { useSocialStore } from '@/store/socialStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -104,7 +105,10 @@ export function PublicProfilePage() {
                 <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
                   <h1 className="text-2xl font-bold text-zinc-100">{profile.displayName}</h1>
                   {!isOwnProfile && isAuthenticated && (
-                    <FollowButton userId={profile.id} isFollowing={profile.isFollowing} />
+                    <div className="flex gap-2">
+                      <FollowButton userId={profile.id} isFollowing={profile.isFollowing} />
+                      <StartConversationButton userId={profile.id} />
+                    </div>
                   )}
                   {isOwnProfile && (
                     <Link to="/profile">

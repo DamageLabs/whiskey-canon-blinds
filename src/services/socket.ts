@@ -32,6 +32,30 @@ export interface SocketEvents {
   };
   'comment:update': { id: string; content: string; updatedAt: string };
   'comment:delete': { id: string; whiskeyId: string };
+  // Messaging events
+  'message:new': {
+    id: string;
+    conversationId: string;
+    content: string;
+    senderId: string;
+    createdAt: string;
+    sender: {
+      id: string;
+      displayName: string;
+      avatarUrl: string | null;
+    };
+  };
+  'message:read': { conversationId: string; readAt: string };
+  'message:typing': { conversationId: string; userId: string };
+  // Achievement events
+  'achievement:earned': {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    rarity: string;
+    points: number;
+  };
 }
 
 export function connectSocket(token: string): Socket {

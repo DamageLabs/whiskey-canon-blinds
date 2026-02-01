@@ -15,7 +15,9 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:seed": "tsx server/src/db/seed.ts",
+    "db:reset": "rm -f data/whiskey.db data/whiskey.db-wal data/whiskey.db-shm && npm run db:seed"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

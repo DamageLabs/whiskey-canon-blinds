@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, schema } from '../db/index.js';
-import { eq, and, gte, desc, sql } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { AuthRequest, authenticateUser } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 
@@ -39,12 +39,12 @@ router.get('/trends', async (req: AuthRequest, res: Response) => {
 
     // Get scores for these participants
     const scores = await db.query.scores.findMany({
-      where: sql`${schema.scores.participantId} IN (${participantIds.join(',')})`,
+      where: inArray(schema.scores.participantId, participantIds),
     });
 
     // Get sessions for date information
     const sessions = await db.query.sessions.findMany({
-      where: sql`${schema.sessions.id} IN (${sessionIds.map(id => `'${id}'`).join(',')})`,
+      where: inArray(schema.sessions.id, sessionIds),
     });
 
     const sessionMap = new Map(sessions.map((s) => [s.id, s]));
@@ -63,9 +63,16 @@ router.get('/trends', async (req: AuthRequest, res: Response) => {
     for (const score of scores) {
       const sessionId = participantSessionMap.get(score.participantId);
       const session = sessionId ? sessionMap.get(sessionId) : null;
-      if (!session || session.createdAt < cutoffDate) continue;
+      if (!session) continue;
 
-      const dateKey = session.createdAt.toISOString().split('T')[0];
+      // Handle createdAt as either Date or number (unix timestamp)
+      const sessionDate = session.createdAt instanceof Date
+        ? session.createdAt
+        : new Date(session.createdAt);
+
+      if (sessionDate < cutoffDate) continue;
+
+      const dateKey = sessionDate.toISOString().split('T')[0];
 
       if (!scoresByDate.has(dateKey)) {
         scoresByDate.set(dateKey, {
@@ -103,7 +110,11 @@ router.get('/trends', async (req: AuthRequest, res: Response) => {
     const allScores = scores.filter((score) => {
       const sessionId = participantSessionMap.get(score.participantId);
       const session = sessionId ? sessionMap.get(sessionId) : null;
-      return session && session.createdAt >= cutoffDate;
+      if (!session) return false;
+      const sessionDate = session.createdAt instanceof Date
+        ? session.createdAt
+        : new Date(session.createdAt);
+      return sessionDate >= cutoffDate;
     });
 
     const summary = {
@@ -148,13 +159,16 @@ router.get('/rankings', async (req: AuthRequest, res: Response) => {
 
     // Get scores for these participants
     const scores = await db.query.scores.findMany({
-      where: sql`${schema.scores.participantId} IN (${participantIds.join(',')})`,
+      where: inArray(schema.scores.participantId, participantIds),
     });
 
     // Get whiskey details
     const whiskeyIds = [...new Set(scores.map((s) => s.whiskeyId))];
+    if (whiskeyIds.length === 0) {
+      return res.json({ rankings: [] });
+    }
     const whiskeys = await db.query.whiskeys.findMany({
-      where: sql`${schema.whiskeys.id} IN (${whiskeyIds.map(id => `'${id}'`).join(',')})`,
+      where: inArray(schema.whiskeys.id, whiskeyIds),
     });
 
     const whiskeyMap = new Map(whiskeys.map((w) => [w.id, w]));
@@ -219,7 +233,7 @@ router.get('/sessions', async (req: AuthRequest, res: Response) => {
     ]);
 
     const allSessions = await db.query.sessions.findMany({
-      where: sql`${schema.sessions.id} IN (${[...allSessionIds].map(id => `'${id}'`).join(',')})`,
+      where: inArray(schema.sessions.id, [...allSessionIds]),
       orderBy: [desc(schema.sessions.createdAt)],
     });
 
@@ -296,7 +310,7 @@ router.get('/distribution', async (req: AuthRequest, res: Response) => {
 
     // Get scores
     const scores = await db.query.scores.findMany({
-      where: sql`${schema.scores.participantId} IN (${participantIds.join(',')})`,
+      where: inArray(schema.scores.participantId, participantIds),
     });
 
     // Build distribution (buckets: 0-1, 1-2, ..., 9-10)
