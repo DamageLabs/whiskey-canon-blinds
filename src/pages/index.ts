@@ -18,3 +18,8 @@ export { FollowingPage } from './Following';
 export { TastingGuidePage } from './TastingGuide';
 export { TemplatesPage } from './Templates';
 export { AnalyticsPage } from './Analytics';
+export { LeaderboardsPage } from './Leaderboards';
+export { NotesLibraryPage } from './NotesLibrary';
+export { MessagesPage } from './Messages';
+export { ConversationPage } from './Conversation';
+export { AchievementsPage } from './Achievements';

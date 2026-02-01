@@ -13,6 +13,30 @@ interface AuthenticatedSocket extends Socket {
   userId?: string;
 }
 
+// Track user connections for messaging
+const userSockets = new Map<string, Set<string>>();
+
+function addUserSocket(userId: string, socketId: string) {
+  if (!userSockets.has(userId)) {
+    userSockets.set(userId, new Set());
+  }
+  userSockets.get(userId)!.add(socketId);
+}
+
+function removeUserSocket(userId: string, socketId: string) {
+  const sockets = userSockets.get(userId);
+  if (sockets) {
+    sockets.delete(socketId);
+    if (sockets.size === 0) {
+      userSockets.delete(userId);
+    }
+  }
+}
+
+export function getUserSocketIds(userId: string): string[] {
+  return Array.from(userSockets.get(userId) || []);
+}
+
 export function initializeSocket(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: {
@@ -53,6 +77,13 @@ export function initializeSocket(httpServer: HttpServer): Server {
 
   io.on('connection', async (socket: AuthenticatedSocket) => {
     logger.debug(`Client connected: ${socket.id}`);
+
+    // Track user socket for messaging
+    if (socket.userId) {
+      addUserSocket(socket.userId, socket.id);
+      // Join a room with userId for direct messaging
+      socket.join(`user:${socket.userId}`);
+    }
 
     // Join session room
     if (socket.sessionId) {
@@ -164,9 +195,22 @@ export function initializeSocket(httpServer: HttpServer): Server {
       });
     });
 
+    // Handle messaging typing indicator
+    socket.on('message:typing', (data: { conversationId: string; recipientId: string }) => {
+      if (!socket.userId) return;
+      io.to(`user:${data.recipientId}`).emit('message:typing', {
+        conversationId: data.conversationId,
+        userId: socket.userId,
+      });
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
       logger.debug(`Client disconnected: ${socket.id}`);
+
+      if (socket.userId) {
+        removeUserSocket(socket.userId, socket.id);
+      }
 
       if (socket.sessionId && socket.participantId) {
         socket.to(socket.sessionId).emit('participant:disconnected', {
@@ -184,4 +228,9 @@ export function getIO(): Server {
     throw new Error('Socket.io not initialized');
   }
   return io;
+}
+
+// Helper to emit to a specific user
+export function emitToUser(userId: string, event: string, data: unknown) {
+  io.to(`user:${userId}`).emit(event, data);
 }

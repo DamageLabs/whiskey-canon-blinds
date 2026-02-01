@@ -1066,4 +1066,292 @@ export const upcomingSessionsApi = {
     request<UpcomingSession[]>('/sessions/upcoming'),
 };
 
+// Leaderboard API
+export type LeaderboardPeriod = 'all_time' | 'monthly' | 'weekly';
+
+export interface LeaderboardEntry {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  totalScore: number;
+  sessionsCount: number;
+  whiskeysRated: number;
+  averageScore: number;
+  ranking: number;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  period: LeaderboardPeriod;
+  periodStart: string;
+}
+
+export interface MyRankResponse {
+  ranks: Record<LeaderboardPeriod, {
+    ranking: number;
+    totalScore: number;
+    sessionsCount: number;
+    whiskeysRated: number;
+    averageScore: number;
+    periodStart: string;
+  } | null>;
+}
+
+export const leaderboardApi = {
+  get: (period: LeaderboardPeriod = 'all_time', page = 1, limit = 20) =>
+    request<LeaderboardResponse>(`/leaderboards?period=${period}&page=${page}&limit=${limit}`),
+
+  getMyRank: () =>
+    request<MyRankResponse>('/leaderboards/my-rank'),
+};
+
+// Tasting Notes Library API
+export interface TastingNoteLibrary {
+  id: string;
+  userId: string;
+  whiskeyName: string;
+  distillery?: string | null;
+  category?: string | null;
+  age?: number | null;
+  proof?: number | null;
+  noseNotes?: string | null;
+  palateNotes?: string | null;
+  finishNotes?: string | null;
+  generalNotes?: string | null;
+  rating?: number | null;
+  sourceScoreId?: string | null;
+  sourceSessionId?: string | null;
+  isPublic: boolean;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotesListResponse {
+  notes: TastingNoteLibrary[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface TagCloudResponse {
+  tags: Array<{ tag: string; count: number }>;
+}
+
+export const notesLibraryApi = {
+  list: (params?: { search?: string; category?: string; tag?: string; page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.tag) searchParams.set('tag', params.tag);
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    return request<NotesListResponse>(`/notes?${searchParams.toString()}`);
+  },
+
+  get: (id: string) =>
+    request<TastingNoteLibrary>(`/notes/${id}`),
+
+  create: (data: Omit<TastingNoteLibrary, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) =>
+    request<TastingNoteLibrary>('/notes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: Partial<Omit<TastingNoteLibrary, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>) =>
+    request<TastingNoteLibrary>(`/notes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    request<{ message: string }>(`/notes/${id}`, { method: 'DELETE' }),
+
+  import: (scoreId: string) =>
+    request<TastingNoteLibrary>(`/notes/import/${scoreId}`, { method: 'POST' }),
+
+  getTags: () =>
+    request<TagCloudResponse>('/notes/tags'),
+};
+
+// Notifications API
+export interface NotificationPreferences {
+  sessionInvites: boolean;
+  sessionStarting: boolean;
+  sessionReveal: boolean;
+  newFollowers: boolean;
+  achievements: boolean;
+  directMessages: boolean;
+}
+
+export const notificationsApi = {
+  getVapidKey: () =>
+    request<{ publicKey: string }>('/notifications/vapid-key'),
+
+  subscribe: (subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    request<{ message: string }>('/notifications/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(subscription),
+    }),
+
+  unsubscribe: (endpoint: string) =>
+    request<{ message: string }>('/notifications/unsubscribe', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    }),
+
+  getPreferences: () =>
+    request<NotificationPreferences>('/notifications/preferences'),
+
+  updatePreferences: (prefs: Partial<NotificationPreferences>) =>
+    request<NotificationPreferences>('/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    }),
+};
+
+// Messaging API
+export interface ConversationPreview {
+  id: string;
+  otherUser: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  lastMessage: {
+    content: string;
+    createdAt: string;
+    isOwn: boolean;
+  } | null;
+  unreadCount: number;
+  lastMessageAt: string | null;
+}
+
+export interface Message {
+  id: string;
+  content: string;
+  senderId: string;
+  readAt: string | null;
+  createdAt: string;
+  isOwn: boolean;
+  sender: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface MessagesResponse {
+  messages: Message[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export const messagingApi = {
+  getConversations: () =>
+    request<{ conversations: ConversationPreview[] }>('/messages/conversations'),
+
+  getOrCreateConversation: (userId: string) =>
+    request<{ id: string; otherUser: { id: string; displayName: string; avatarUrl: string | null } }>(`/messages/conversations/${userId}`),
+
+  getMessages: (conversationId: string, page = 1) =>
+    request<MessagesResponse>(`/messages/${conversationId}?page=${page}`),
+
+  sendMessage: (conversationId: string, content: string) =>
+    request<Message>(`/messages/${conversationId}`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+
+  markAsRead: (conversationId: string) =>
+    request<{ message: string }>(`/messages/${conversationId}/read`, { method: 'POST' }),
+
+  getUnreadCount: () =>
+    request<{ unreadCount: number }>('/messages/unread-count'),
+
+  canMessage: (userId: string) =>
+    request<{ canMessage: boolean; reason: string | null }>(`/messages/can-message/${userId}`),
+};
+
+// Enhanced Achievements API
+export interface AchievementDefinition {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  points: number;
+  earned: boolean;
+  earnedAt: string | null;
+  progress: number;
+  target: number;
+  percentComplete: number;
+}
+
+export interface AchievementsProgressResponse {
+  achievements: AchievementDefinition[];
+  summary: {
+    earned: number;
+    total: number;
+    percentage: number;
+    totalPoints: number;
+  };
+}
+
+export interface UnclaimedAchievement {
+  id: string;
+  achievementId: string;
+  earnedAt: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  rarity: string;
+  points: number;
+}
+
+export interface AchievementLeaderboardEntry {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  totalPoints: number;
+  achievementCount: number;
+  ranking: number;
+}
+
+export const achievementsApi = {
+  getAll: () =>
+    request<{ achievements: AchievementDefinition[] }>('/achievements'),
+
+  getMyProgress: () =>
+    request<AchievementsProgressResponse>('/achievements/my-progress'),
+
+  claim: (achievementId: string) =>
+    request<{ message: string }>(`/achievements/${achievementId}/claim`, { method: 'POST' }),
+
+  getUnclaimed: () =>
+    request<{ unclaimed: UnclaimedAchievement[] }>('/achievements/unclaimed'),
+
+  getLeaderboard: (page = 1, limit = 20) =>
+    request<{
+      entries: AchievementLeaderboardEntry[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>(`/achievements/leaderboard?page=${page}&limit=${limit}`),
+};
+
 export { ApiError };

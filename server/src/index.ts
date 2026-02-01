@@ -20,6 +20,11 @@ import socialRoutes from './routes/social.js';
 import templatesRoutes from './routes/templates.js';
 import commentsRoutes from './routes/comments.js';
 import analyticsRoutes from './routes/analytics.js';
+import leaderboardsRoutes from './routes/leaderboards.js';
+import notesRoutes from './routes/notes.js';
+import notificationsRoutes from './routes/notifications.js';
+import messagesRoutes from './routes/messages.js';
+import achievementsRoutes from './routes/achievements.js';
 import { logger } from './utils/logger.js';
 
 // Load environment variables
@@ -119,6 +124,11 @@ app.use('/api/social', socialRoutes);
 app.use('/api/templates', templatesRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/leaderboards', leaderboardsRoutes);
+app.use('/api/notes', notesRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/messages', messagesRoutes);
+app.use('/api/achievements', achievementsRoutes);
 
 // Error handling
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
