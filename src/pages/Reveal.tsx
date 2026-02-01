@@ -4,7 +4,7 @@ import { Button, Card, CardContent } from '@/components/ui';
 import { CommentList } from '@/components/comments';
 import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
-import { socialApi, resultsExportApi } from '@/services/api';
+import { socialApi, resultsExportApi, sessionsApi } from '@/services/api';
 import { getScoreDescriptor } from '@/utils/scoring';
 
 export function RevealPage() {
@@ -19,6 +19,12 @@ export function RevealPage() {
   const [sharingScoreId, setSharingScoreId] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [isDuplicating, setIsDuplicating] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Close export menu when clicking outside
@@ -91,6 +97,51 @@ export function RevealPage() {
       }
       return next;
     });
+  };
+
+  const handleDuplicate = async () => {
+    if (!sessionId || isDuplicating) return;
+    setIsDuplicating(true);
+    try {
+      const result = await sessionsApi.duplicate(sessionId);
+      navigate(`/session/${result.id}/setup`);
+    } catch (err) {
+      console.error('Failed to duplicate session:', err);
+      alert('Failed to duplicate session. Please try again.');
+    } finally {
+      setIsDuplicating(false);
+    }
+  };
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionId || !inviteEmail || isSendingInvite) return;
+    setIsSendingInvite(true);
+    setInviteStatus(null);
+    try {
+      await sessionsApi.sendInvite(sessionId, inviteEmail);
+      setInviteStatus({ type: 'success', message: 'Invite sent successfully!' });
+      setInviteEmail('');
+    } catch (err) {
+      console.error('Failed to send invite:', err);
+      setInviteStatus({ type: 'error', message: 'Failed to send invite. Please try again.' });
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!sessionId || !session || isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await sessionsApi.exportPdf(sessionId, session.name);
+      setShowExportMenu(false);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+      alert('Failed to export PDF. Please try again.');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -340,10 +391,49 @@ export function RevealPage() {
 
         {/* Actions */}
         {revealedCount === totalWhiskeys && totalWhiskeys > 0 && (
-          <div className="mt-8 flex justify-center gap-4">
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Button variant="secondary" onClick={() => navigate('/')}>
               Back to Home
             </Button>
+
+            {/* Moderator Actions */}
+            {isModerator && (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={handleDuplicate}
+                  disabled={isDuplicating}
+                >
+                  {isDuplicating ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Duplicating...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Duplicate Session
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowInviteModal(true)}
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Invite via Email
+                </Button>
+              </>
+            )}
+
             <div className="relative" ref={exportMenuRef}>
               <Button
                 variant="primary"
@@ -369,19 +459,100 @@ export function RevealPage() {
                     Download CSV
                   </button>
                   <button
+                    onClick={handleExportPdf}
+                    disabled={isExportingPdf}
+                    className="w-full px-4 py-3 text-left text-zinc-200 hover:bg-zinc-700 flex items-center gap-3 border-t border-zinc-700 disabled:opacity-50"
+                  >
+                    <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    {isExportingPdf ? 'Generating...' : 'Download PDF'}
+                  </button>
+                  <button
                     onClick={() => {
                       resultsExportApi.downloadPDF(results);
                       setShowExportMenu(false);
                     }}
                     className="w-full px-4 py-3 text-left text-zinc-200 hover:bg-zinc-700 flex items-center gap-3 border-t border-zinc-700"
                   >
-                    <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                     </svg>
                     Print / Save PDF
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Invite Modal */}
+        {showInviteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-zinc-800 rounded-xl max-w-md w-full p-6 border border-zinc-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-zinc-100">Invite via Email</h3>
+                <button
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    setInviteEmail('');
+                    setInviteStatus(null);
+                  }}
+                  className="text-zinc-400 hover:text-zinc-200"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <p className="text-zinc-400 text-sm mb-4">
+                Send an email invitation with the session details and join link.
+              </p>
+
+              <form onSubmit={handleSendInvite}>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="Enter email address"
+                  className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-lg text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent mb-4"
+                  required
+                />
+
+                {inviteStatus && (
+                  <div className={`mb-4 p-3 rounded-lg text-sm ${
+                    inviteStatus.type === 'success'
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  }`}>
+                    {inviteStatus.message}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setInviteEmail('');
+                      setInviteStatus(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={isSendingInvite || !inviteEmail}
+                    className="flex-1"
+                  >
+                    {isSendingInvite ? 'Sending...' : 'Send Invite'}
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}

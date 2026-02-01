@@ -150,3 +150,92 @@ export async function sendPasswordResetEmail(
     return { success: false, error: 'Failed to send password reset email' };
   }
 }
+
+export async function sendSessionInviteEmail(
+  email: string,
+  sessionName: string,
+  hostName: string,
+  scheduledAt: Date,
+  inviteCode: string,
+  joinLink: string
+): Promise<SendVerificationEmailResult> {
+  const resend = getResendClient();
+
+  const formattedDate = scheduledAt.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const formattedTime = scheduledAt.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  // Without API key, log the invite (dev mode)
+  if (!resend) {
+    logger.dev('===========================================');
+    logger.dev(`[DEV MODE] Session invite for ${email}`);
+    logger.dev(`Session: ${sessionName}`);
+    logger.dev(`Host: ${hostName}`);
+    logger.dev(`Date: ${formattedDate} at ${formattedTime}`);
+    logger.dev(`Invite Code: ${inviteCode}`);
+    logger.dev(`Join Link: ${joinLink}`);
+    logger.dev('===========================================');
+    return { success: true };
+  }
+
+  try {
+    logger.debug(`[Email] Sending session invite to ${email}`);
+    const result = await resend.emails.send({
+      from: getFromEmail(),
+      to: email,
+      subject: `${APP_NAME} - You're invited to ${sessionName}`,
+      html: `
+        <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <h1 style="color: #d97706; margin-bottom: 24px;">You're Invited!</h1>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            ${hostName} has invited you to join a blind whiskey tasting session.
+          </p>
+
+          <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); border: 2px solid #d97706; border-radius: 12px; padding: 24px; margin: 24px 0;">
+            <h2 style="color: #78350f; margin: 0 0 12px 0; font-size: 24px;">${sessionName}</h2>
+            <p style="color: #92400e; margin: 0; font-size: 16px;">
+              <strong>When:</strong> ${formattedDate} at ${formattedTime}
+            </p>
+          </div>
+
+          <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+            Join the session using the invite code below:
+          </p>
+
+          <div style="background: #f3f4f6; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1f2937; font-family: monospace;">${inviteCode}</span>
+          </div>
+
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${joinLink}" style="display: inline-block; background: #d97706; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+              Join Session
+            </a>
+          </div>
+
+          <p style="color: #6b7280; font-size: 14px;">
+            Click the button above or enter the invite code at ${APP_NAME} to join. Make sure you have your whiskey pours ready!
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+          <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+            ${APP_NAME} - Taste responsibly. Score honestly.
+          </p>
+        </div>
+      `,
+    });
+    logger.debug(`[Email] Sent successfully:`, result);
+    return { success: true };
+  } catch (error) {
+    logger.error('[Email] Failed to send session invite email:', error);
+    return { success: false, error: 'Failed to send session invite email' };
+  }
+}
