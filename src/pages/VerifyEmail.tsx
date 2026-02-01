@@ -19,6 +19,7 @@ export function VerifyEmailPage() {
   const [newDevCode, setNewDevCode] = useState<string | null>(null);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const hasAutoResent = useRef(false);
   const CODE_LENGTH = 8;
 
   // Redirect if no email, or auto-send verification if coming from login (no devCode means no recent registration)
@@ -28,7 +29,9 @@ export function VerifyEmailPage() {
       return;
     }
     // Auto-send verification email if we don't have a devCode (coming from login, not registration)
-    if (!devCode && resendCooldown === 0) {
+    // Use ref to prevent double-send in StrictMode
+    if (!devCode && !hasAutoResent.current) {
+      hasAutoResent.current = true;
       handleResend();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
