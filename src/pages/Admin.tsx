@@ -30,6 +30,7 @@ export function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'users' | 'sessions'>('users');
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) {
@@ -37,8 +38,23 @@ export function AdminPage() {
       return;
     }
 
+    fetchCsrfToken();
     fetchData();
   }, [isAuthenticated, isAdmin, navigate]);
+
+  const fetchCsrfToken = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/csrf-token`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCsrfToken(data.csrfToken);
+      }
+    } catch (err) {
+      console.error('Failed to fetch CSRF token:', err);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -82,6 +98,7 @@ export function AdminPage() {
         credentials: 'include', // Send httpOnly cookies for authentication
         headers: {
           'Content-Type': 'application/json',
+          ...(csrfToken && { 'x-csrf-token': csrfToken }),
         },
         body: JSON.stringify({ role: newRole }),
       });
@@ -104,6 +121,9 @@ export function AdminPage() {
       const res = await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
         method: 'DELETE',
         credentials: 'include', // Send httpOnly cookies for authentication
+        headers: {
+          ...(csrfToken && { 'x-csrf-token': csrfToken }),
+        },
       });
 
       if (!res.ok) {
@@ -124,6 +144,9 @@ export function AdminPage() {
       const res = await fetch(`${API_BASE_URL}/admin/sessions/${sessionId}`, {
         method: 'DELETE',
         credentials: 'include', // Send httpOnly cookies for authentication
+        headers: {
+          ...(csrfToken && { 'x-csrf-token': csrfToken }),
+        },
       });
 
       if (!res.ok) {

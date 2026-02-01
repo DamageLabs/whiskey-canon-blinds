@@ -72,8 +72,11 @@ app.use(cookieParser());
 // Apply general rate limiting to all API routes
 app.use('/api', generalLimiter);
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(process.cwd(), 'dist', 'uploads')));
+// Serve uploaded files with cross-origin access (needed for dev where frontend/backend are different origins)
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(process.cwd(), 'dist', 'uploads')));
 
 // Health check
 app.get('/api/health', (req, res) => {
