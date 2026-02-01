@@ -314,6 +314,38 @@ export const sessionsApi = {
 
   list: () =>
     request<SessionResponse[]>('/sessions'),
+
+  duplicate: (sessionId: string) =>
+    request<{ id: string; inviteCode: string; message: string }>(
+      `/sessions/${sessionId}/duplicate`,
+      { method: 'POST' }
+    ),
+
+  sendInvite: (sessionId: string, email: string) =>
+    request<{ message: string }>(
+      `/sessions/${sessionId}/invite`,
+      { method: 'POST', body: JSON.stringify({ email }) }
+    ),
+
+  exportPdf: async (sessionId: string, sessionName: string) => {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
+    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}/export/pdf`, {
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Download failed' }));
+      throw new Error(error.error || 'Download failed');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sessionName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-results.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
 };
 
 // Scores API

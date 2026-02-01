@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { randomInt } from 'crypto';
 import jwt from 'jsonwebtoken';
+import PDFDocument from 'pdfkit';
 import { db, schema } from '../db/index.js';
 import { eq, and, gt, asc, desc, or } from 'drizzle-orm';
 import {
@@ -16,6 +17,7 @@ import { sessionJoinLimiter } from '../middleware/rateLimit.js';
 import { getIO } from '../socket/index.js';
 import { validateLength, INPUT_LIMITS } from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
+import { sendSessionInviteEmail } from '../services/email.js';
 
 const router = Router();
 
@@ -831,6 +833,351 @@ router.get('/upcoming', authenticateUser, async (req: AuthRequest, res: Response
   } catch (error) {
     logger.error('Get upcoming sessions error:', error);
     return res.status(500).json({ error: 'Failed to get upcoming sessions' });
+  }
+});
+
+// Export session results as PDF
+router.get('/:sessionId/export/pdf', authenticateAny, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+
+    const session = await db.query.sessions.findFirst({
+      where: eq(schema.sessions.id, sessionId),
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Session must be in reveal or completed status
+    if (session.status !== 'reveal' && session.status !== 'completed') {
+      return res.status(400).json({ error: 'Session results are not yet available' });
+    }
+
+    // Get whiskeys
+    const sessionWhiskeys = await db.query.whiskeys.findMany({
+      where: eq(schema.whiskeys.sessionId, sessionId),
+    });
+
+    // Get participants
+    const sessionParticipants = await db.query.participants.findMany({
+      where: eq(schema.participants.sessionId, sessionId),
+    });
+
+    // Get all scores
+    const sessionScores = await db.query.scores.findMany({
+      where: eq(schema.scores.sessionId, sessionId),
+    });
+
+    // Calculate results for each whiskey
+    const whiskeyResults = sessionWhiskeys.map((whiskey) => {
+      const whiskeyScores = sessionScores.filter((s) => s.whiskeyId === whiskey.id);
+      const scoreCount = whiskeyScores.length;
+
+      if (scoreCount === 0) {
+        return {
+          whiskey,
+          averageScore: 0,
+          categoryAverages: { nose: 0, palate: 0, finish: 0, overall: 0 },
+          scoreCount: 0,
+        };
+      }
+
+      const avgNose = whiskeyScores.reduce((sum, s) => sum + s.nose, 0) / scoreCount;
+      const avgPalate = whiskeyScores.reduce((sum, s) => sum + s.palate, 0) / scoreCount;
+      const avgFinish = whiskeyScores.reduce((sum, s) => sum + s.finish, 0) / scoreCount;
+      const avgOverall = whiskeyScores.reduce((sum, s) => sum + s.overall, 0) / scoreCount;
+      const avgTotal = whiskeyScores.reduce((sum, s) => sum + s.totalScore, 0) / scoreCount;
+
+      return {
+        whiskey,
+        averageScore: avgTotal,
+        categoryAverages: {
+          nose: avgNose,
+          palate: avgPalate,
+          finish: avgFinish,
+          overall: avgOverall,
+        },
+        scoreCount,
+      };
+    });
+
+    // Sort by average score descending
+    whiskeyResults.sort((a, b) => b.averageScore - a.averageScore);
+
+    // Assign rankings
+    whiskeyResults.forEach((result, index) => {
+      (result as { ranking?: number }).ranking = index + 1;
+    });
+
+    // Create PDF
+    const doc = new PDFDocument({ margin: 50 });
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${session.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-results.pdf"`
+    );
+
+    // Pipe the PDF to the response
+    doc.pipe(res);
+
+    // Title
+    doc.fontSize(24).fillColor('#d97706').text('Whiskey Canon', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(20).fillColor('#1f2937').text(session.name, { align: 'center' });
+    doc.moveDown(0.3);
+
+    // Session info
+    doc.fontSize(12).fillColor('#6b7280');
+    doc.text(`Theme: ${session.theme}${session.customTheme ? ` (${session.customTheme})` : ''}`, { align: 'center' });
+    doc.text(`Date: ${session.scheduledAt.toLocaleDateString()}`, { align: 'center' });
+    doc.text(`Participants: ${sessionParticipants.length}`, { align: 'center' });
+    doc.moveDown(1.5);
+
+    // Winner section
+    const winner = whiskeyResults[0];
+    if (winner && winner.scoreCount > 0) {
+      doc.fontSize(14).fillColor('#92400e').text('WINNER', { align: 'center' });
+      doc.fontSize(18).fillColor('#78350f').text(winner.whiskey.name, { align: 'center' });
+      doc.fontSize(12).fillColor('#92400e').text(winner.whiskey.distillery, { align: 'center' });
+      doc.fontSize(24).fillColor('#d97706').text(`${winner.averageScore.toFixed(1)} / 10`, { align: 'center' });
+      doc.moveDown(1.5);
+    }
+
+    // Results table header
+    doc.fontSize(10).fillColor('#6b7280');
+    const tableTop = doc.y;
+    const col1 = 50;
+    const col2 = 80;
+    const col3 = 280;
+    const col4 = 340;
+    const col5 = 390;
+    const col6 = 440;
+    const col7 = 490;
+
+    doc.text('Rank', col1, tableTop);
+    doc.text('Whiskey', col2, tableTop);
+    doc.text('Score', col3, tableTop);
+    doc.text('Nose', col4, tableTop);
+    doc.text('Palate', col5, tableTop);
+    doc.text('Finish', col6, tableTop);
+    doc.text('Overall', col7, tableTop);
+    doc.moveDown(0.5);
+
+    // Draw line under header
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb');
+    doc.moveDown(0.5);
+
+    // Results rows
+    whiskeyResults.forEach((result) => {
+      const y = doc.y;
+      const ranking = (result as { ranking?: number }).ranking || 0;
+
+      // Rank
+      doc.fontSize(12).fillColor(ranking <= 3 ? '#d97706' : '#374151');
+      doc.text(`#${ranking}`, col1, y);
+
+      // Whiskey info
+      doc.fontSize(10).fillColor('#1f2937');
+      doc.text(result.whiskey.name, col2, y, { width: 180 });
+      doc.fontSize(8).fillColor('#6b7280');
+      const detailsY = y + 12;
+      let details = result.whiskey.distillery;
+      if (result.whiskey.age) details += ` | ${result.whiskey.age}yr`;
+      if (result.whiskey.proof) details += ` | ${result.whiskey.proof}°`;
+      doc.text(details, col2, detailsY, { width: 180 });
+
+      // Scores
+      doc.fontSize(12).fillColor('#d97706');
+      doc.text(result.averageScore.toFixed(1), col3, y);
+
+      doc.fontSize(10).fillColor('#374151');
+      doc.text(result.categoryAverages.nose.toFixed(1), col4, y);
+      doc.text(result.categoryAverages.palate.toFixed(1), col5, y);
+      doc.text(result.categoryAverages.finish.toFixed(1), col6, y);
+      doc.text(result.categoryAverages.overall.toFixed(1), col7, y);
+
+      doc.moveDown(1.5);
+    });
+
+    // Participant stats section
+    doc.moveDown(1);
+    doc.fontSize(14).fillColor('#1f2937').text('Participant Statistics', { underline: true });
+    doc.moveDown(0.5);
+
+    sessionParticipants.forEach((participant) => {
+      const participantScores = sessionScores.filter((s) => s.participantId === participant.id);
+      if (participantScores.length === 0) return;
+
+      const avgScore = participantScores.reduce((sum, s) => sum + s.totalScore, 0) / participantScores.length;
+
+      doc.fontSize(10).fillColor('#374151');
+      doc.text(`${participant.displayName}: ${avgScore.toFixed(2)} avg (${participantScores.length} whiskeys rated)`);
+    });
+
+    // Footer
+    doc.moveDown(2);
+    doc.fontSize(8).fillColor('#9ca3af');
+    doc.text(`Generated by Whiskey Canon Blinds on ${new Date().toLocaleDateString()}`, { align: 'center' });
+
+    // Finalize PDF
+    doc.end();
+  } catch (error) {
+    logger.error('Export PDF error:', error);
+    return res.status(500).json({ error: 'Failed to export PDF' });
+  }
+});
+
+// Duplicate session
+router.post('/:sessionId/duplicate', authenticateUser, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+
+    const session = await db.query.sessions.findFirst({
+      where: eq(schema.sessions.id, sessionId),
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Only allow moderator to duplicate their own sessions
+    if (session.moderatorId !== req.userId) {
+      return res.status(403).json({ error: 'Only the session moderator can duplicate this session' });
+    }
+
+    // Get whiskeys from original session
+    const originalWhiskeys = await db.query.whiskeys.findMany({
+      where: eq(schema.whiskeys.sessionId, sessionId),
+    });
+
+    // Create new session
+    const newSessionId = uuidv4();
+    const inviteCode = generateInviteCode();
+    const now = new Date();
+
+    await db.insert(schema.sessions).values({
+      id: newSessionId,
+      name: `${session.name} (Copy)`,
+      theme: session.theme,
+      customTheme: session.customTheme,
+      proofMin: session.proofMin,
+      proofMax: session.proofMax,
+      scheduledAt: now,
+      status: 'draft',
+      moderatorId: req.userId!,
+      currentWhiskeyIndex: 0,
+      currentPhase: 'pour',
+      inviteCode,
+      maxParticipants: session.maxParticipants,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Copy whiskeys
+    for (const w of originalWhiskeys) {
+      await db.insert(schema.whiskeys).values({
+        id: uuidv4(),
+        sessionId: newSessionId,
+        displayNumber: w.displayNumber,
+        name: w.name,
+        distillery: w.distillery,
+        age: w.age,
+        proof: w.proof,
+        price: w.price,
+        mashbill: w.mashbill,
+        region: w.region,
+        pourSize: w.pourSize,
+      });
+    }
+
+    logger.info(`Session ${sessionId} duplicated to ${newSessionId} by user ${req.userId}`);
+
+    return res.status(201).json({
+      id: newSessionId,
+      inviteCode,
+      message: 'Session duplicated successfully',
+    });
+  } catch (error) {
+    logger.error('Duplicate session error:', error);
+    return res.status(500).json({ error: 'Failed to duplicate session' });
+  }
+});
+
+// Send session invite email
+router.post('/:sessionId/invite', authenticateAny, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    const session = await db.query.sessions.findFirst({
+      where: eq(schema.sessions.id, sessionId),
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Check if user is moderator
+    let isModerator = false;
+    if (req.userId && session.moderatorId === req.userId) {
+      isModerator = true;
+    } else if (req.participantId) {
+      const participant = await db.query.participants.findFirst({
+        where: eq(schema.participants.id, req.participantId),
+      });
+      if (participant?.userId === session.moderatorId) {
+        isModerator = true;
+      }
+    }
+
+    if (!isModerator) {
+      return res.status(403).json({ error: 'Only the moderator can send invites' });
+    }
+
+    // Get moderator name
+    const moderator = await db.query.users.findFirst({
+      where: eq(schema.users.id, session.moderatorId),
+    });
+
+    const hostName = moderator?.displayName || 'The host';
+
+    // Generate join link
+    const baseUrl = process.env.APP_URL || 'http://localhost:5173';
+    const joinLink = `${baseUrl}/join?code=${session.inviteCode}`;
+
+    // Send invite email
+    const result = await sendSessionInviteEmail(
+      email,
+      session.name,
+      hostName,
+      session.scheduledAt,
+      session.inviteCode,
+      joinLink
+    );
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to send invite email' });
+    }
+
+    logger.info(`Session invite sent to ${email} for session ${sessionId}`);
+
+    return res.json({ message: 'Invite sent successfully' });
+  } catch (error) {
+    logger.error('Send invite error:', error);
+    return res.status(500).json({ error: 'Failed to send invite' });
   }
 });
 
