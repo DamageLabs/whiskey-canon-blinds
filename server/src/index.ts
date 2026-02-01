@@ -36,6 +36,9 @@ validateJwtSecret();
 const app = express();
 const httpServer = createServer(app);
 
+// Trust first proxy (nginx/load balancer) - required for secure cookies and rate limiting behind reverse proxy
+app.set('trust proxy', 1);
+
 // Initialize socket.io
 initializeSocket(httpServer);
 
