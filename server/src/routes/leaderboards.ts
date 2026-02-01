@@ -41,7 +41,42 @@ async function updateLeaderboard(period: LeaderboardPeriod) {
   const userIds = publicUsers.map(u => u.id);
   if (userIds.length === 0) return [];
 
-  // Calculate scores for each user in the period
+  // Batch query: Get all scores for all public users in one query
+  // Join users -> participants -> scores -> sessions
+  const allScores = await db.select({
+    odUserId: schema.participants.userId,
+    odSessionId: schema.scores.sessionId,
+    totalScore: schema.scores.totalScore,
+  })
+    .from(schema.scores)
+    .innerJoin(schema.participants, eq(schema.scores.participantId, schema.participants.id))
+    .innerJoin(schema.sessions, eq(schema.scores.sessionId, schema.sessions.id))
+    .where(
+      and(
+        sql`${schema.participants.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`,
+        eq(schema.sessions.status, 'completed'),
+        period !== 'all_time' ? gte(schema.scores.lockedAt, periodStart) : sql`1=1`
+      )
+    );
+
+  // Aggregate scores by user in memory (much faster than N+1 queries)
+  const userScoreMap = new Map<string, { totalScore: number; sessions: Set<string>; whiskeysRated: number }>();
+
+  for (const score of allScores) {
+    const userId = score.odUserId;
+    if (!userId) continue;
+
+    if (!userScoreMap.has(userId)) {
+      userScoreMap.set(userId, { totalScore: 0, sessions: new Set(), whiskeysRated: 0 });
+    }
+
+    const userScore = userScoreMap.get(userId)!;
+    userScore.totalScore += score.totalScore;
+    userScore.sessions.add(score.odSessionId);
+    userScore.whiskeysRated += 1;
+  }
+
+  // Build user stats from aggregated data
   const userStats: Array<{
     userId: string;
     displayName: string;
@@ -53,13 +88,9 @@ async function updateLeaderboard(period: LeaderboardPeriod) {
   }> = [];
 
   for (const user of publicUsers) {
-    // Get participant records for this user
-    const participants = await db.query.participants.findMany({
-      where: eq(schema.participants.userId, user.id),
-    });
+    const scoreData = userScoreMap.get(user.id);
 
-    const participantIds = participants.map(p => p.id);
-    if (participantIds.length === 0) {
+    if (!scoreData || scoreData.whiskeysRated === 0) {
       userStats.push({
         userId: user.id,
         displayName: user.displayName,
@@ -69,39 +100,17 @@ async function updateLeaderboard(period: LeaderboardPeriod) {
         whiskeysRated: 0,
         averageScore: 0,
       });
-      continue;
+    } else {
+      userStats.push({
+        userId: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        totalScore: scoreData.totalScore,
+        sessionsCount: scoreData.sessions.size,
+        whiskeysRated: scoreData.whiskeysRated,
+        averageScore: scoreData.totalScore / scoreData.whiskeysRated,
+      });
     }
-
-    // Get scores within the period
-    const scores = await db.select()
-      .from(schema.scores)
-      .innerJoin(schema.sessions, eq(schema.scores.sessionId, schema.sessions.id))
-      .where(
-        and(
-          sql`${schema.scores.participantId} IN (${sql.join(participantIds.map(id => sql`${id}`), sql`, `)})`,
-          eq(schema.sessions.status, 'completed'),
-          period !== 'all_time' ? gte(schema.scores.lockedAt, periodStart) : sql`1=1`
-        )
-      );
-
-    const totalScore = scores.reduce((sum, s) => sum + s.scores.totalScore, 0);
-    const whiskeysRated = scores.length;
-
-    // Count unique sessions
-    const uniqueSessions = new Set(scores.map(s => s.scores.sessionId));
-    const sessionsCount = uniqueSessions.size;
-
-    const averageScore = whiskeysRated > 0 ? totalScore / whiskeysRated : 0;
-
-    userStats.push({
-      userId: user.id,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
-      totalScore,
-      sessionsCount,
-      whiskeysRated,
-      averageScore,
-    });
   }
 
   // Sort by average score (descending), then by whiskeys rated
@@ -112,34 +121,41 @@ async function updateLeaderboard(period: LeaderboardPeriod) {
     return b.whiskeysRated - a.whiskeysRated;
   });
 
-  // Assign rankings and upsert leaderboard entries
+  // Batch fetch existing leaderboard entries for this period
+  const existingEntries = await db.query.leaderboardEntries.findMany({
+    where: and(
+      eq(schema.leaderboardEntries.period, period),
+      eq(schema.leaderboardEntries.periodStart, periodStart)
+    ),
+  });
+
+  const existingByUserId = new Map(existingEntries.map(e => [e.userId, e]));
+
+  // Assign rankings and batch upsert leaderboard entries
   const entries = [];
+  const toInsert: Array<typeof schema.leaderboardEntries.$inferInsert> = [];
+  const toUpdate: Array<{ id: string; data: Partial<typeof schema.leaderboardEntries.$inferSelect> }> = [];
+
   for (let i = 0; i < userStats.length; i++) {
     const stat = userStats[i];
     const ranking = i + 1;
 
-    // Check if entry exists
-    const existing = await db.query.leaderboardEntries.findFirst({
-      where: and(
-        eq(schema.leaderboardEntries.userId, stat.userId),
-        eq(schema.leaderboardEntries.period, period),
-        eq(schema.leaderboardEntries.periodStart, periodStart)
-      ),
-    });
+    const existing = existingByUserId.get(stat.userId);
 
     if (existing) {
-      await db.update(schema.leaderboardEntries)
-        .set({
+      toUpdate.push({
+        id: existing.id,
+        data: {
           totalScore: stat.totalScore,
           sessionsCount: stat.sessionsCount,
           whiskeysRated: stat.whiskeysRated,
           averageScore: stat.averageScore,
           ranking,
           updatedAt: now,
-        })
-        .where(eq(schema.leaderboardEntries.id, existing.id));
+        },
+      });
     } else {
-      await db.insert(schema.leaderboardEntries).values({
+      toInsert.push({
         id: uuidv4(),
         userId: stat.userId,
         period,
@@ -157,6 +173,22 @@ async function updateLeaderboard(period: LeaderboardPeriod) {
       ...stat,
       ranking,
     });
+  }
+
+  // Batch insert new entries
+  if (toInsert.length > 0) {
+    await db.insert(schema.leaderboardEntries).values(toInsert);
+  }
+
+  // Batch update existing entries (SQLite doesn't support bulk update, so we do them individually but in parallel)
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map(({ id, data }) =>
+        db.update(schema.leaderboardEntries)
+          .set(data)
+          .where(eq(schema.leaderboardEntries.id, id))
+      )
+    );
   }
 
   return entries;

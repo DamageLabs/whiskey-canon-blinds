@@ -27,9 +27,11 @@ import {
   AchievementsPage,
 } from '@/pages';
 import { Layout } from '@/components/layout';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
@@ -94,6 +96,7 @@ function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 
