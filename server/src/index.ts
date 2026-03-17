@@ -6,7 +6,8 @@ import { createServer } from 'http';
 import path from 'path';
 import dotenv from 'dotenv';
 
-import { initializeDatabase } from './db/index.js';
+import { db, initializeDatabase } from './db/index.js';
+import { sql } from 'drizzle-orm';
 import { initializeSocket } from './socket/index.js';
 import { validateJwtSecret } from './middleware/auth.js';
 import { generalLimiter } from './middleware/rateLimit.js';
@@ -83,7 +84,23 @@ app.use('/uploads', (req, res, next) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  let dbStatus = 'ok';
+  try {
+    db.run(sql`SELECT 1`);
+  } catch {
+    dbStatus = 'error';
+  }
+
+  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
+  res.status(status === 'ok' ? 200 : 503).json({
+    status,
+    service: 'whiskey-canon-blinds',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    checks: {
+      database: dbStatus,
+    },
+  });
 });
 
 // CSRF token endpoint - requires authentication, must be before CSRF protection middleware
