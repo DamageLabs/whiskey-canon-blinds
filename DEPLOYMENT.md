@@ -1,462 +1,233 @@
-# Deploying Whiskey Canon Blinds on GCP VM with Nginx
+# Whiskey Canon Blinds — Production Deployment Guide
 
-This guide covers deploying the application on a Google Cloud Platform Virtual Machine using Nginx as a reverse proxy.
+This guide covers deploying Whiskey Canon Blinds on the DamageLabs GCP VM.
+
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Production Details](#production-details)
+3. [Deploy Application](#deploy-application)
+4. [Configure Environment](#configure-environment)
+5. [Database Setup](#database-setup)
+6. [systemd Service](#systemd-service)
+7. [Nginx Configuration](#nginx-configuration)
+8. [SSL with Let's Encrypt](#ssl-with-lets-encrypt)
+9. [Maintenance](#maintenance)
+10. [Troubleshooting](#troubleshooting)
+
+---
 
 ## Prerequisites
 
-- GCP account with billing enabled
-- Domain name (optional, but recommended for HTTPS)
-- Basic familiarity with Linux command line
+- GCP VM running Ubuntu 24.04 LTS
+- Node.js installed at `/usr/local/bin/node`
+- Nginx installed and running
+- Git installed
+- Domain DNS pointing to the VM's external IP
+
+## Production Details
+
+| Setting | Value |
+|---------|-------|
+| Domain | blinds.whiskey-canon.com |
+| Port | 3003 |
+| Directory | `/var/www/blinds.whiskey-canon.com` |
+| User | `fusion94` |
+| Process Manager | systemd (`whiskey-canon-blinds.service`) |
+| Database | SQLite (`data/whiskey.db`) |
+| Node Binary | `/usr/local/bin/node` |
 
 ---
 
-## 1. Create a GCP Virtual Machine
+## Deploy Application
 
-### Via GCP Console
-
-1. Go to **Compute Engine** > **VM instances**
-2. Click **Create Instance**
-3. Configure the VM:
-   - **Name**: `whiskey-canon-blinds`
-   - **Region**: Choose closest to your users
-   - **Machine type**: `e2-small` (2 vCPU, 2GB memory) minimum
-   - **Boot disk**: Ubuntu 22.04 LTS, 20GB SSD
-   - **Firewall**: Check "Allow HTTP traffic" and "Allow HTTPS traffic"
-4. Click **Create**
-
-### Via gcloud CLI
+### Initial Deploy
 
 ```bash
-gcloud compute instances create whiskey-canon-blinds \
-  --zone=us-central1-a \
-  --machine-type=e2-small \
-  --image-family=ubuntu-2204-lts \
-  --image-project=ubuntu-os-cloud \
-  --boot-disk-size=20GB \
-  --tags=http-server,https-server
-```
+cd /var/www
+sudo git clone https://github.com/DamageLabs/whiskey-canon-blinds.git blinds.whiskey-canon.com
+sudo chown -R fusion94:fusion94 blinds.whiskey-canon.com
+cd blinds.whiskey-canon.com
 
----
-
-## 2. Connect to the VM
-
-```bash
-gcloud compute ssh whiskey-canon-blinds --zone=us-central1-a
-```
-
-Or use the SSH button in the GCP Console.
-
----
-
-## 3. Install Dependencies
-
-### Update system packages
-
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
-### Install Node.js 20.x
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-```
-
-### Install Nginx
-
-```bash
-sudo apt install -y nginx
-```
-
-### Install PM2 (Process Manager)
-
-```bash
-sudo npm install -g pm2
-```
-
-### Install Git
-
-```bash
-sudo apt install -y git
-```
-
----
-
-## 4. Clone and Build the Application
-
-### Clone the repository
-
-```bash
-cd /opt
-sudo git clone https://github.com/DamageLabs/whiskey-canon-blinds.git
-sudo chown -R $USER:$USER whiskey-canon-blinds
-cd whiskey-canon-blinds
-```
-
-### Install dependencies
-
-```bash
+# Install dependencies
 npm install
+
+# Build server
+npm run build:server
+
+# Build client
+npm run build
 ```
 
-### Create environment file
+### Update Deploy
 
 ```bash
-cat > .env << 'EOF'
-# Server Configuration
-PORT=3001
-NODE_ENV=production
+cd /var/www/blinds.whiskey-canon.com
+git pull origin main
+npm install
+npm run build:server
+npm run build
+sudo systemctl restart whiskey-canon-blinds
+```
 
-# JWT Secret (generate a secure random string)
-JWT_SECRET=your-secure-random-string-here-change-this
+---
+
+## Configure Environment
+
+```bash
+cat > /var/www/blinds.whiskey-canon.com/.env << 'EOF'
+# Server
+PORT=3003
+NODE_ENV=production
 
 # Database
 DATABASE_PATH=./data/whiskey.db
 
-# CORS (your domain or VM's external IP)
-CORS_ORIGIN=https://yourdomain.com
+# Auth
+JWT_SECRET=<run: openssl rand -hex 64>
+
+# CORS
+CORS_ORIGIN=https://blinds.whiskey-canon.com
+CLIENT_URL=https://blinds.whiskey-canon.com
+
+# Frontend
+VITE_API_URL=https://blinds.whiskey-canon.com/api
+
+# Email (Resend)
+RESEND_API_KEY=<your-key>
+FROM_EMAIL=Whiskey Canon <noreply@blinds.whiskey-canon.com>
+EOF
+
+chmod 600 /var/www/blinds.whiskey-canon.com/.env
+```
+
+---
+
+## Database Setup
+
+The SQLite database is stored at `data/whiskey.db` and initialized automatically on first run.
+
+```bash
+# Ensure data directory exists
+mkdir -p /var/www/blinds.whiskey-canon.com/data
+```
+
+---
+
+## systemd Service
+
+### Create the Service
+
+```bash
+sudo tee /etc/systemd/system/whiskey-canon-blinds.service > /dev/null << 'EOF'
+[Unit]
+Description=Whiskey Canon Blinds (blinds.whiskey-canon.com)
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=fusion94
+Group=fusion94
+WorkingDirectory=/var/www/blinds.whiskey-canon.com
+ExecStart=/usr/local/bin/node server/dist/index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+Environment=PORT=3003
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
 EOF
 ```
 
-Generate a secure JWT secret:
+### Enable and Start
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+sudo systemctl daemon-reload
+sudo systemctl enable whiskey-canon-blinds
+sudo systemctl start whiskey-canon-blinds
 ```
 
-### Build the frontend
+### Common Commands
 
 ```bash
-npm run build
-```
-
-### Build the server
-
-```bash
-npm run build:server
-```
-
-### Initialize the database
-
-```bash
-mkdir -p data
-node -e "require('./server/dist/db/index.js')"
+sudo systemctl status whiskey-canon-blinds      # Check status
+sudo systemctl restart whiskey-canon-blinds     # Restart
+sudo systemctl stop whiskey-canon-blinds        # Stop
+sudo journalctl -u whiskey-canon-blinds -f      # Follow logs
+sudo journalctl -u whiskey-canon-blinds -n 50   # Last 50 lines
 ```
 
 ---
 
-## 5. Configure PM2 to Run the Server
+## Nginx Configuration
 
-### Create PM2 ecosystem file
+The Nginx config is version-controlled in `DamageLabs/brain` at `infra/nginx/sites-available/whiskey-canon-blinds`.
 
-```bash
-cat > ecosystem.config.cjs << 'EOF'
-module.exports = {
-  apps: [{
-    name: 'whiskey-canon-blinds',
-    script: './server/dist/index.js',
-    instances: 1,
-    exec_mode: 'fork',
-    env: {
-      NODE_ENV: 'production',
-      PORT: 3001
-    },
-    error_file: './logs/error.log',
-    out_file: './logs/output.log',
-    merge_logs: true,
-    time: true
-  }]
-};
-EOF
-
-mkdir -p logs
-```
-
-### Start the application
+Key points:
+- Static files served from `/var/www/blinds.whiskey-canon.com/dist`
+- API requests proxied to `localhost:3003`
+- Shared snippets: `security-headers.conf`, `static-cache.conf`
 
 ```bash
-pm2 start ecosystem.config.cjs
-```
-
-### Configure PM2 to start on boot
-
-```bash
-pm2 startup systemd
-pm2 save
-```
-
-### Useful PM2 commands
-
-```bash
-pm2 status          # Check status
-pm2 logs            # View logs
-pm2 restart all     # Restart application
-pm2 stop all        # Stop application
+sudo ln -sf /etc/nginx/sites-available/whiskey-canon-blinds /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ---
 
-## 6. Configure Nginx
-
-### Create Nginx configuration
+## SSL with Let's Encrypt
 
 ```bash
-sudo nano /etc/nginx/sites-available/whiskey-canon-blinds
+sudo certbot --nginx -d blinds.whiskey-canon.com \
+  --non-interactive --agree-tos -m fusion94@gmail.com
 ```
 
-Paste the following configuration:
-
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com;  # Replace with your domain or VM's external IP
-
-    # Frontend static files
-    root /opt/whiskey-canon-blinds/dist;
-    index index.html;
-
-    # Gzip compression
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
-
-    # API proxy
-    location /api {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # WebSocket proxy for Socket.io
-    location /socket.io {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Uploads directory
-    location /uploads {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    # SPA fallback - serve index.html for all other routes
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Cache static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
-
-### Enable the site
-
-```bash
-sudo ln -s /etc/nginx/sites-available/whiskey-canon-blinds /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default  # Remove default site
-```
-
-### Test and reload Nginx
-
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
----
-
-## 7. Configure Firewall (if using ufw)
-
-```bash
-sudo ufw allow 'Nginx Full'
-sudo ufw allow OpenSSH
-sudo ufw enable
-```
-
----
-
-## 8. Set Up HTTPS with Let's Encrypt (Recommended)
-
-### Install Certbot
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-```
-
-### Obtain SSL certificate
-
-```bash
-sudo certbot --nginx -d yourdomain.com
-```
-
-Follow the prompts. Certbot will automatically configure Nginx for HTTPS.
-
-### Auto-renewal
-
-Certbot sets up auto-renewal automatically. Test it with:
-
+Auto-renewal test:
 ```bash
 sudo certbot renew --dry-run
 ```
 
 ---
 
-## 9. Update Frontend API URL
+## Maintenance
 
-After setting up the domain, update the frontend to use the correct API URL.
-
-### Create production environment file
+### Database Backup
 
 ```bash
-cat > .env.production << 'EOF'
-VITE_API_URL=https://yourdomain.com/api
-EOF
+# Manual backup
+cp /var/www/blinds.whiskey-canon.com/data/whiskey.db ~/backups/blinds-$(date +%Y%m%d-%H%M%S).db
+
+# Automated daily backup (add to crontab)
+0 2 * * * cp /var/www/blinds.whiskey-canon.com/data/whiskey.db /home/fusion94/backups/blinds-$(date +\%Y\%m\%d).db
 ```
 
-### Rebuild the frontend
+### View Logs
 
 ```bash
-npm run build
-```
-
----
-
-## 10. Maintenance
-
-### View logs
-
-```bash
-# Application logs
-pm2 logs whiskey-canon-blinds
-
-# Nginx access logs
+sudo journalctl -u whiskey-canon-blinds -f
 sudo tail -f /var/log/nginx/access.log
-
-# Nginx error logs
-sudo tail -f /var/log/nginx/error.log
-```
-
-### Update the application
-
-```bash
-cd /opt/whiskey-canon-blinds
-git pull origin main
-npm install
-npm run build
-npm run build:server
-pm2 restart all
-```
-
-### Backup the database
-
-```bash
-# Create backup
-cp /opt/whiskey-canon-blinds/data/whiskey.db ~/backups/whiskey-$(date +%Y%m%d).db
-
-# Or use cron for automated backups
-crontab -e
-# Add: 0 2 * * * cp /opt/whiskey-canon-blinds/data/whiskey.db /home/$USER/backups/whiskey-$(date +\%Y\%m\%d).db
 ```
 
 ---
 
 ## Troubleshooting
 
-### Application not starting
-
-```bash
-pm2 logs whiskey-canon-blinds --lines 50
-```
-
-### 502 Bad Gateway
-
-Check if the Node.js server is running:
-
-```bash
-pm2 status
-curl http://localhost:3001/api/auth/me
-```
-
-### WebSocket connection issues
-
-Ensure the `/socket.io` location block is configured in Nginx with proper WebSocket headers.
-
-### Permission issues
-
-```bash
-sudo chown -R $USER:$USER /opt/whiskey-canon-blinds
-chmod -R 755 /opt/whiskey-canon-blinds
-```
-
-### Check Nginx configuration
-
-```bash
-sudo nginx -t
-sudo systemctl status nginx
-```
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Exit code 203 | Node binary not accessible | Verify `/usr/local/bin/node` exists |
+| Exit code 1 | Missing env var | Check `.env` has JWT_SECRET, DATABASE_PATH |
+| Port conflict | Another process on 3003 | `sudo ss -tlnp \| grep :3003` |
+| 502 Bad Gateway | Service not running | `sudo systemctl start whiskey-canon-blinds` |
+| CORS errors | Wrong CORS_ORIGIN | Must match exact domain including `https://` |
 
 ---
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Internet                             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    GCP Virtual Machine                       │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                      Nginx (:80/:443)                 │  │
-│  │  - SSL termination                                    │  │
-│  │  - Static file serving (dist/)                        │  │
-│  │  - Reverse proxy to Node.js                           │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                              │                               │
-│              ┌───────────────┴───────────────┐              │
-│              ▼                               ▼              │
-│  ┌─────────────────────┐      ┌─────────────────────────┐  │
-│  │   /api/* requests   │      │   /socket.io requests   │  │
-│  └─────────────────────┘      └─────────────────────────┘  │
-│              │                               │              │
-│              └───────────────┬───────────────┘              │
-│                              ▼                               │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │              Node.js Server (:3001)                   │  │
-│  │  - Express API                                        │  │
-│  │  - Socket.io WebSocket server                         │  │
-│  │  - SQLite database                                    │  │
-│  │  - Managed by PM2                                     │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Cost Estimate
-
-| Resource | Specification | Monthly Cost (approx) |
-|----------|--------------|----------------------|
-| VM (e2-small) | 2 vCPU, 2GB RAM | ~$13 |
-| Boot disk | 20GB SSD | ~$2 |
-| Network egress | 1GB | Free tier |
-| **Total** | | **~$15/month** |
-
-*Costs vary by region. Check [GCP Pricing Calculator](https://cloud.google.com/products/calculator) for accurate estimates.*
+*Last updated: March 17, 2026*
